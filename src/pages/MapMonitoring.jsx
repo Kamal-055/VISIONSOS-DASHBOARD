@@ -52,11 +52,14 @@ const icons = {
   lightOffline: createSVGIcon("#64748B", "light"),
 };
 
-// Component to dynamically recenter the map on live events
+// Component to dynamically recenter the map on live events without looping
 const ChangeMapView = ({ center }) => {
   const map = useMap();
+  const prevCenterRef = React.useRef(null);
+
   useEffect(() => {
-    if (center) {
+    if (center && (!prevCenterRef.current || prevCenterRef.current[0] !== center[0] || prevCenterRef.current[1] !== center[1])) {
+      prevCenterRef.current = center;
       map.setView(center, 15, { animate: true });
     }
   }, [center, map]);
@@ -99,9 +102,11 @@ const MapMonitoring = () => {
   }, []);
 
   // Map center logic (center on alert if exists, otherwise Police HQ)
-  const mapCenter = currentAlert 
-    ? [currentAlert.latitude, currentAlert.longitude] 
-    : [28.6139, 77.2090];
+  const mapCenter = React.useMemo(() => {
+    return currentAlert 
+      ? [currentAlert.latitude, currentAlert.longitude] 
+      : [28.6139, 77.2090];
+  }, [currentAlert?.latitude, currentAlert?.longitude]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -147,10 +152,10 @@ const MapMonitoring = () => {
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          <ChangeMapView center={currentAlert ? [currentAlert.latitude, currentAlert.longitude] : null} />
+          <ChangeMapView center={currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' ? [currentAlert.latitude, currentAlert.longitude] : null} />
 
           {/* 1. Render Active SOS Citizen Marker */}
-          {currentAlert && (
+          {currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' && (
             <Marker 
               position={[currentAlert.latitude, currentAlert.longitude]} 
               icon={icons.sos}
@@ -174,44 +179,51 @@ const MapMonitoring = () => {
           )}
 
           {/* 2. Render Police Station Precinct HQ Markers */}
-          {policeStations.map((station, i) => (
-            <Marker
-              key={`station-${i}`}
-              position={[station.lat, station.lng]}
-              icon={icons.police}
-            >
-              <Popup>
-                <div className="p-1 text-xs space-y-1">
-                  <strong className="text-blue-400 font-bold block">{station.name}</strong>
-                  <span className="text-gray-400 block">{station.details}</span>
-                  <span className="text-[9px] font-mono text-green-400">DISPATCH READY</span>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {policeStations.map((station, i) => {
+            if (typeof station.lat !== 'number' || typeof station.lng !== 'number') return null;
+            return (
+              <Marker
+                key={`station-${i}`}
+                position={[station.lat, station.lng]}
+                icon={icons.police}
+              >
+                <Popup>
+                  <div className="p-1 text-xs space-y-1">
+                    <strong className="text-blue-400 font-bold block">{station.name}</strong>
+                    <span className="text-gray-400 block">{station.details}</span>
+                    <span className="text-[9px] font-mono text-green-400">DISPATCH READY</span>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* 3. Render Simulated Patrol Units */}
-          {policeUnits.map((unit) => (
-            <Marker
-              key={unit.id}
-              position={[unit.lat, unit.lng]}
-              icon={icons.police}
-            >
-              <Popup>
-                <div className="p-1 text-xs space-y-1">
-                  <strong className="text-blue-400 font-bold block">{unit.name}</strong>
-                  <p className="text-gray-300"><strong>Officer:</strong> {unit.officer}</p>
-                  <span className="text-[9px] font-mono bg-blue-950 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest font-bold">
-                    PATROL PATROLING
-                  </span>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {policeUnits.map((unit) => {
+            if (typeof unit.lat !== 'number' || typeof unit.lng !== 'number') return null;
+            return (
+              <Marker
+                key={unit.id}
+                position={[unit.lat, unit.lng]}
+                icon={icons.police}
+              >
+                <Popup>
+                  <div className="p-1 text-xs space-y-1">
+                    <strong className="text-blue-400 font-bold block">{unit.name}</strong>
+                    <p className="text-gray-300"><strong>Officer:</strong> {unit.officer}</p>
+                    <span className="text-[9px] font-mono bg-blue-950 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest font-bold">
+                      PATROL PATROLING
+                    </span>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* 4. Render IoT Streetlights */}
           {Object.keys(streetlights).map((key) => {
             const pole = streetlights[key];
+            if (!pole || typeof pole.latitude !== 'number' || typeof pole.longitude !== 'number') return null;
             let poleIcon = icons.lightOnline;
             if (pole.state === "MAINTENANCE") poleIcon = icons.lightMaint;
             if (pole.status === "OFFLINE" || pole.state === "OFFLINE") poleIcon = icons.lightOffline;

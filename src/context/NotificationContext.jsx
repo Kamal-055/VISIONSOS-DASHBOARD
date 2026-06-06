@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 
 const NotificationContext = createContext({
   toasts: [],
@@ -21,12 +21,16 @@ export const NotificationProvider = ({ children }) => {
   
   const audioCtxRef = useRef(null);
   const osc1Ref = useRef(null);
-  const osc2Ref = useRef(null);
   const gainNodeRef = useRef(null);
   const sirenIntervalRef = useRef(null);
 
-  // Helper to add toast notifications
-  const addToast = (message, type = "info") => {
+  // Memoize removeToast to avoid recreation loops
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Memoize addToast
+  const addToast = useCallback((message, type = "info") => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     
@@ -34,14 +38,10 @@ export const NotificationProvider = ({ children }) => {
     setTimeout(() => {
       removeToast(id);
     }, 5000);
-  };
-
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [removeToast]);
 
   // Web Audio API emergency siren synthesizer
-  const startSirenAudio = () => {
+  const startSirenAudio = useCallback(() => {
     if (isMuted) return;
     
     try {
@@ -56,11 +56,11 @@ export const NotificationProvider = ({ children }) => {
 
       // Create main gain node for volume control
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0.08, ctx.currentTime); // Low volume so it is not annoying
+      gainNode.gain.setValueAtTime(0.08, ctx.currentTime); // Low volume
       gainNode.connect(ctx.destination);
       gainNodeRef.current = gainNode;
 
-      // Create two oscillators for a dual-tone police siren
+      // Create oscillator for police siren
       const osc1 = ctx.createOscillator();
       osc1.type = "sawtooth";
       osc1.frequency.setValueAtTime(450, ctx.currentTime);
@@ -83,9 +83,9 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       console.error("Failed to start siren audio synth:", error);
     }
-  };
+  }, [isMuted]);
 
-  const stopSirenAudio = () => {
+  const stopSirenAudio = useCallback(() => {
     if (sirenIntervalRef.current) {
       clearInterval(sirenIntervalRef.current);
       sirenIntervalRef.current = null;
@@ -107,10 +107,9 @@ export const NotificationProvider = ({ children }) => {
     }
     
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      // Just suspend context instead of closing to reuse it
       audioCtxRef.current.suspend();
     }
-  };
+  }, []);
 
   // Handle playing/stopping the siren based on states
   useEffect(() => {
@@ -121,9 +120,9 @@ export const NotificationProvider = ({ children }) => {
     }
 
     return () => stopSirenAudio();
-  }, [isSirenPlaying, isMuted]);
+  }, [isSirenPlaying, isMuted, startSirenAudio, stopSirenAudio]);
 
-  const value = {
+  const value = React.useMemo(() => ({
     toasts,
     addToast,
     removeToast,
@@ -133,7 +132,7 @@ export const NotificationProvider = ({ children }) => {
     setMuted,
     activeSOSAlerts,
     setActiveSOSAlerts
-  };
+  }), [toasts, addToast, removeToast, isSirenPlaying, isMuted, activeSOSAlerts]);
 
   return (
     <NotificationContext.Provider value={value}>
