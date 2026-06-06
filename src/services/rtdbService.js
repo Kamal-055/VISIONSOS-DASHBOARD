@@ -1,6 +1,10 @@
 import { ref, onValue, set, update, get, remove } from "firebase/database";
 import { dbRealtime } from "../firebase/firebaseConfig";
 
+// Session-level blacklist of resolved alert UIDs
+// This prevents background coordinate updates from active mobile phones from triggering alarms repeatedly
+const resolvedUids = new Set();
+
 // ===== LIVE TRACKING SUBSCRIPTIONS =====
 
 // Subscribe to all live tracking active SOS alert items from the Flutter mobile app
@@ -8,21 +12,35 @@ export const subscribeToLiveTracking = (onTrackingUpdated) => {
   const trackingRef = ref(dbRealtime, "live_tracking");
   const unsubscribe = onValue(trackingRef, (snapshot) => {
     const data = snapshot.val() || {};
-    const activeAlerts = Object.keys(data).map(uid => {
-      const item = data[uid];
-      return {
-        uid,
-        alertId: "SOS-" + uid.substring(0, 5).toUpperCase(),
-        userName: item.userName || item.name || "Citizen (" + uid.substring(0, 4) + ")",
-        phone: item.phone || item.phoneNumber || "+91 99999 99999",
-        latitude: Number(item.latitude || 28.6139),
-        longitude: Number(item.longitude || 77.2090),
-        timestamp: item.timestamp || new Date().toISOString(),
-        nearestLight: item.nearestLight || "SL1",
-        distance: item.distance || "15m",
-        status: "ACTIVE"
-      };
+    
+    // Filter out blacklisted/resolved UIDs
+    const activeAlerts = Object.keys(data)
+      .filter(uid => !resolvedUids.has(uid))
+      .map(uid => {
+        const item = data[uid];
+        return {
+          uid,
+          alertId: "SOS-" + uid.substring(0, 5).toUpperCase(),
+          userName: item.userName || item.name || "Citizen (" + uid.substring(0, 4) + ")",
+          phone: item.phone || item.phoneNumber || "+91 99999 99999",
+          latitude: Number(item.latitude || 28.6139),
+          longitude: Number(item.longitude || 77.2090),
+          timestamp: item.timestamp || new Date().toISOString(),
+          nearestLight: item.nearestLight || "SL1",
+          distance: item.distance || "15m",
+          status: "ACTIVE"
+        };
+      });
+
+    // Auto-clean database for any incoming coordinate updates on resolved sessions
+    Object.keys(data).forEach(uid => {
+      if (resolvedUids.has(uid)) {
+        // Silently remove the re-created node to clean up the database
+        const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
+        remove(trackerRef).catch(e => console.warn("Auto-cleanup of resolved tracker failed:", e));
+      }
     });
+
     onTrackingUpdated(activeAlerts);
   });
   return unsubscribe;
@@ -58,6 +76,9 @@ export const subscribeToAnalyticsSummary = (onSummaryUpdated) => {
 // Write active SOS tracker to RTDB (for Simulation console)
 export const setLiveTrackingAlert = async (uid, alertData) => {
   try {
+    // If we are triggering a new simulation, ensure it's removed from blacklist
+    resolvedUids.delete(uid);
+
     const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
     await set(trackerRef, alertData);
     
@@ -81,6 +102,9 @@ export const setLiveTrackingAlert = async (uid, alertData) => {
 // Clear/resolve live tracking alert by UID
 export const clearLiveTrackingAlert = async (uid) => {
   try {
+    // Blacklist immediately to prevent race condition notifications on deletion
+    resolvedUids.add(uid);
+
     const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
     await remove(trackerRef);
     
