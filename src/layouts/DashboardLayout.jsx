@@ -3,7 +3,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Common/Sidebar";
 import Navbar from "../components/Common/Navbar";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToLiveTracking, subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToCurrentAlert, subscribeToStreetlights } from "../services/rtdbService";
 
 const DashboardLayout = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -11,32 +11,29 @@ const DashboardLayout = () => {
   const { addToast, setSirenPlaying, setActiveSOSAlerts } = useNotifications();
   
   // Track alert status and streetlight states to detect changes
-  const seenAlertIdsRef = useRef(new Set());
+  const prevAlertIdRef = useRef(null);
   const prevStreetlightsRef = useRef({});
 
   useEffect(() => {
-    // 1. Subscribe to Live SOS Alerts from live_tracking reference
-    const unsubscribeAlerts = subscribeToLiveTracking((alerts) => {
-      setActiveSOSAlerts(alerts);
-      
-      if (alerts.length > 0) {
-        let hasNewAlert = false;
+    // 1. Subscribe to Live SOS Alerts from RTDB
+    const unsubscribeAlerts = subscribeToCurrentAlert((alert) => {
+      if (alert) {
+        // Active alert exists
+        setActiveSOSAlerts([alert]);
         
-        alerts.forEach((alert) => {
-          if (!seenAlertIdsRef.current.has(alert.alertId)) {
-            seenAlertIdsRef.current.add(alert.alertId);
-            addToast(`CRITICAL: Live SOS Alert [${alert.alertId}] from ${alert.userName}!`, "danger");
-            hasNewAlert = true;
-          }
-        });
-        
-        if (hasNewAlert) {
+        // Check if this is a newly received alert
+        if (alert.alertId !== prevAlertIdRef.current) {
+          prevAlertIdRef.current = alert.alertId;
+          
+          // Trigger notifications
+          addToast(`CRITICAL: Live SOS Alert [${alert.alertId}] from ${alert.userName}!`, "danger");
           setSirenPlaying(true);
         }
       } else {
-        // No active alerts
+        // No active alert
+        setActiveSOSAlerts([]);
         setSirenPlaying(false);
-        seenAlertIdsRef.current.clear();
+        prevAlertIdRef.current = null;
       }
     });
 

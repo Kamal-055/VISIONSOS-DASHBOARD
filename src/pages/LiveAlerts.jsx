@@ -34,6 +34,13 @@ const LiveAlerts = () => {
     // Subscribe to live tracking alerts list
     const unsub = subscribeToLiveTracking((alerts) => {
       setActiveAlerts(alerts);
+      
+      // Auto toggle siren playing if active alerts exist
+      if (alerts.length > 0) {
+        setSirenPlaying(true);
+      } else {
+        setSirenPlaying(false);
+      }
     });
 
     // Subscribe to officers list from Firestore in real-time
