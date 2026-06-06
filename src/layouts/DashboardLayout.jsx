@@ -11,7 +11,7 @@ const DashboardLayout = () => {
   const { addToast, setSirenPlaying, setActiveSOSAlerts } = useNotifications();
   
   // Track alert status and streetlight states to detect changes
-  const prevAlertIdRef = useRef(null);
+  const seenAlertIdsRef = useRef(new Set());
   const prevStreetlightsRef = useRef({});
 
   useEffect(() => {
@@ -20,17 +20,23 @@ const DashboardLayout = () => {
       setActiveSOSAlerts(alerts);
       
       if (alerts.length > 0) {
-        // If there are alerts, check if there's a new one to alarm for
-        const latestAlert = alerts[alerts.length - 1];
-        if (latestAlert.alertId !== prevAlertIdRef.current) {
-          prevAlertIdRef.current = latestAlert.alertId;
-          addToast(`CRITICAL: Live SOS Alert [${latestAlert.alertId}] from ${latestAlert.userName}!`, "danger");
+        let hasNewAlert = false;
+        
+        alerts.forEach((alert) => {
+          if (!seenAlertIdsRef.current.has(alert.alertId)) {
+            seenAlertIdsRef.current.add(alert.alertId);
+            addToast(`CRITICAL: Live SOS Alert [${alert.alertId}] from ${alert.userName}!`, "danger");
+            hasNewAlert = true;
+          }
+        });
+        
+        if (hasNewAlert) {
           setSirenPlaying(true);
         }
       } else {
         // No active alerts
         setSirenPlaying(false);
-        prevAlertIdRef.current = null;
+        seenAlertIdsRef.current.clear();
       }
     });
 
