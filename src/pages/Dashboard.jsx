@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB } from "../services/rtdbService";
-import { subscribeToIncidents, subscribeToSOSHistory, seedFirestoreData } from "../services/firestoreService";
+import { 
+  subscribeToLiveTracking, 
+  subscribeToAnalyticsSummary, 
+  subscribeToStreetlights, 
+  setLiveTrackingAlert, 
+  clearLiveTrackingAlert 
+} from "../services/rtdbService";
+import { subscribeToIncidents, seedFirestoreData } from "../services/firestoreService";
 import { 
   ShieldAlert, 
   CheckCircle, 
@@ -22,57 +28,59 @@ const Dashboard = () => {
   const { addToast } = useNotifications();
   
   // Real-time states
-  const [currentAlert, setCurrentAlertState] = useState(null);
+  const [activeAlerts, setActiveAlerts] = useState([]);
+  const [summary, setSummary] = useState({ activeSOS: 0, resolvedSOS: 59, totalSOS: 59 });
   const [streetlights, setStreetlights] = useState({});
   const [incidents, setIncidents] = useState([]);
-  const [historyCount, setHistoryCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    // 1. Listen to live SOS alerts
-    const unsubAlert = subscribeToCurrentAlert((alert) => {
-      setCurrentAlertState(alert);
+    // 1. Listen to live tracking active alerts from RTDB
+    const unsubTracking = subscribeToLiveTracking((alerts) => {
+      setActiveAlerts(alerts);
     });
 
-    // 2. Listen to streetlights
+    // 2. Listen to analytics summary counts from RTDB
+    const unsubSummary = subscribeToAnalyticsSummary((data) => {
+      setSummary(data);
+    });
+
+    // 3. Listen to streetlights
     const unsubStreetlights = subscribeToStreetlights((lights) => {
       setStreetlights(lights);
     });
 
-    // 3. Listen to incidents in real-time
+    // 4. Listen to incidents in real-time
     const unsubIncidents = subscribeToIncidents((incs) => {
       setIncidents(incs);
       setLoading(false);
     });
 
-    // 4. Listen to SOS history in real-time
-    const unsubHistory = subscribeToSOSHistory((hist) => {
-      setHistoryCount(hist.length);
-    });
-
     return () => {
-      unsubAlert();
+      unsubTracking();
+      unsubSummary();
       unsubStreetlights();
       unsubIncidents();
-      unsubHistory();
     };
   }, []);
 
-  // Recalculate stats
-  const activeSOSCount = currentAlert ? 1 : 0;
+  // Recalculate stats using Realtime Database synchronized values
+  const currentAlert = activeAlerts.length > 0 ? activeAlerts[0] : null;
+  const activeSOSCount = summary.activeSOS;
+  const resolvedCasesCount = summary.resolvedSOS;
+  const totalSOSAlerts = summary.totalSOS;
   
   const totalStreetlights = Object.keys(streetlights).length;
   const onlineStreetlights = Object.values(streetlights).filter(s => s.status === "ONLINE").length;
   const offlineStreetlights = totalStreetlights - onlineStreetlights;
 
-  const resolvedCasesCount = incidents.filter(i => i.status === "RESOLVED" || i.status === "SAFE").length + historyCount;
   const activeIncidents = incidents.filter(i => i.status === "ACTIVE" || i.status === "IN_PROGRESS");
-  const totalSOSAlerts = historyCount + activeSOSCount;
 
   // Trigger Mock SOS alert in Firebase Realtime Database
   const triggerTestSOS = async () => {
-    const mockSOSId = "SOS-" + Math.floor(1000 + Math.random() * 9000);
+    const mockUid = "user_mock_" + Math.floor(1000 + Math.random() * 9000);
+    const mockSOSId = "SOS-" + mockUid.substring(10);
     const mockNames = ["Aisha Sen", "Vikram Malhotra", "Kiran Joshi", "Siddharth Roy", "Riya Mehta"];
     const mockName = mockNames[Math.floor(Math.random() * mockNames.length)];
     
@@ -87,7 +95,7 @@ const Dashboard = () => {
     const testAlert = {
       alertId: mockSOSId,
       userName: mockName,
-      user: "user_test_" + Math.floor(Math.random() * 100),
+      user: mockUid,
       phone: "+91 95555 " + Math.floor(10000 + Math.random() * 90000),
       latitude: 28.6139 + latOffset,
       longitude: 77.2090 + lngOffset,
@@ -98,7 +106,7 @@ const Dashboard = () => {
     };
 
     try {
-      await setCurrentAlert(testAlert);
+      await setLiveTrackingAlert(mockUid, testAlert);
       addToast(`TEST SOS Simulated: ${mockSOSId} triggered successfully.`, "success");
     } catch (e) {
       addToast("Failed to write simulation SOS alert to Realtime Database.", "danger");
@@ -120,11 +128,14 @@ const Dashboard = () => {
   };
 
   const handleResolveAlert = async () => {
+    const targetUid = currentAlert ? currentAlert.uid : null;
+    if (!targetUid) return;
     try {
-      await clearCurrentAlertInRTDB();
+      await clearLiveTrackingAlert(targetUid);
       addToast("Active SOS alert cleared from live channel.", "success");
     } catch (e) {
       console.error(e);
+      addToast("Failed to resolve active alert.", "danger");
     }
   };
 
