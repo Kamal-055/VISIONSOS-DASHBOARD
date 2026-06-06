@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { subscribeToLiveTracking, subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToCurrentAlert, subscribeToStreetlights } from "../services/rtdbService";
 import { subscribeToPoliceStations, subscribeToPoliceUnits } from "../services/firestoreService";
 import { Radio, ShieldAlert, Compass } from "lucide-react";
 
@@ -67,16 +67,16 @@ const ChangeMapView = ({ center }) => {
 };
 
 const MapMonitoring = () => {
-  const [activeAlerts, setActiveAlerts] = useState([]);
+  const [currentAlert, setCurrentAlert] = useState(null);
   const [streetlights, setStreetlights] = useState({});
   const [policeStations, setPoliceStations] = useState([]);
   const [policeUnits, setPoliceUnits] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Subscribe to Live Alerts from live_tracking reference
-    const unsubAlert = subscribeToLiveTracking((alerts) => {
-      setActiveAlerts(alerts);
+    // 1. Subscribe to Live Alerts
+    const unsubAlert = subscribeToCurrentAlert((alert) => {
+      setCurrentAlert(alert);
     });
 
     // 2. Subscribe to Streetlights
@@ -102,8 +102,6 @@ const MapMonitoring = () => {
       unsubUnits();
     };
   }, []);
-
-  const currentAlert = activeAlerts.length > 0 ? activeAlerts[0] : null;
 
   // Map center logic (center on alert if exists, otherwise Police HQ)
   const mapCenter = React.useMemo(() => {
@@ -158,33 +156,29 @@ const MapMonitoring = () => {
 
           <ChangeMapView center={currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' ? [currentAlert.latitude, currentAlert.longitude] : null} />
 
-          {/* 1. Render Active SOS Citizen Markers */}
-          {activeAlerts.map((alert) => {
-            if (typeof alert.latitude !== 'number' || typeof alert.longitude !== 'number') return null;
-            return (
-              <Marker 
-                key={alert.uid}
-                position={[alert.latitude, alert.longitude]} 
-                icon={icons.sos}
-              >
-                <Popup>
-                  <div className="space-y-1.5 p-1 text-xs">
-                    <div className="flex items-center gap-1.5 text-brand-danger font-bold uppercase tracking-wider">
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
-                      Distress SOS Active
-                    </div>
-                    <div className="border-t border-slate-700 my-1 pt-1 space-y-1 font-mono">
-                      <p><strong>Citizen:</strong> {alert.userName}</p>
-                      <p><strong>Contact:</strong> {alert.phone}</p>
-                      <p><strong>Pole Assigner:</strong> {alert.nearestLight || "N/A"}</p>
-                      <p><strong>Pole Distance:</strong> {alert.distance || "0m"}</p>
-                      <p><strong>Time:</strong> {new Date(alert.timestamp).toLocaleTimeString()}</p>
-                    </div>
+          {/* 1. Render Active SOS Citizen Marker */}
+          {currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' && (
+            <Marker 
+              position={[currentAlert.latitude, currentAlert.longitude]} 
+              icon={icons.sos}
+            >
+              <Popup>
+                <div className="space-y-1.5 p-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-brand-danger font-bold uppercase tracking-wider">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
+                    Distress SOS Active
                   </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+                  <div className="border-t border-slate-700 my-1 pt-1 space-y-1 font-mono">
+                    <p><strong>Citizen:</strong> {currentAlert.userName}</p>
+                    <p><strong>Contact:</strong> {currentAlert.phone}</p>
+                    <p><strong>Pole Assigner:</strong> {currentAlert.nearestLight || "N/A"}</p>
+                    <p><strong>Pole Distance:</strong> {currentAlert.distance || "0m"}</p>
+                    <p><strong>Time:</strong> {new Date(currentAlert.timestamp).toLocaleTimeString()}</p>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* 2. Render Police Station Precinct HQ Markers */}
           {policeStations.map((station, i) => {
