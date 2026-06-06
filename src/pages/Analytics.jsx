@@ -13,7 +13,7 @@ import {
   Legend,
   Filler
 } from "chart.js";
-import { getIncidents, getSOSHistory } from "../services/firestoreService";
+import { subscribeToIncidents, subscribeToSOSHistory } from "../services/firestoreService";
 import { subscribeToStreetlights } from "../services/rtdbService";
 import { BarChart3, TrendingUp, ShieldCheck, Activity } from "lucide-react";
 
@@ -38,27 +38,24 @@ const Analytics = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const incs = await getIncidents();
-        setIncidents(incs);
-        
-        const hist = await getSOSHistory();
-        setHistory(hist);
-      } catch (err) {
-        console.error("Error loading analytics data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const unsubIncidents = subscribeToIncidents((incs) => {
+      setIncidents(incs);
+      setLoading(false);
+    });
 
-    loadData();
+    const unsubHistory = subscribeToSOSHistory((hist) => {
+      setHistory(hist);
+    });
 
     const unsubLights = subscribeToStreetlights((lights) => {
       setStreetlights(lights);
     });
 
-    return () => unsubLights();
+    return () => {
+      unsubIncidents();
+      unsubHistory();
+      unsubLights();
+    };
   }, []);
 
   // Compute metrics
@@ -91,14 +88,31 @@ const Analytics = () => {
   };
 
   // Chart 2: Daily SOS Load trends (Line Chart)
-  // Generating a realistic mock scale if history is short, but aggregates from real history
+  // Aggregate SOS history counts by day of the week
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayCounts = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+  
+  history.forEach((item) => {
+    if (item.timestamp) {
+      try {
+        const d = new Date(item.timestamp);
+        const dayName = days[d.getDay()];
+        if (dayCounts[dayName] !== undefined) {
+          dayCounts[dayName]++;
+        }
+      } catch (e) {
+        console.error("Error parsing timestamp in analytics:", e);
+      }
+    }
+  });
+
   const lineData = {
     labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     datasets: [
       {
         fill: true,
         label: "SOS Panic Alerts",
-        data: [18, 12, 24, 15, 30, 28, 22], // Mock trend line
+        data: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => dayCounts[d]),
         borderColor: "rgba(59, 130, 246, 1)",
         backgroundColor: "rgba(59, 130, 246, 0.15)",
         tension: 0.35,
@@ -126,7 +140,7 @@ const Analytics = () => {
     datasets: [
       {
         label: "Distress Signals Aggregated",
-        data: Object.keys(poleCounts).sort().map(k => poleCounts[k] + (k === "SL1" ? 12 : k === "SL2" ? 8 : k === "SL3" ? 15 : 4)), // Seed fallbacks + real logs
+        data: Object.keys(poleCounts).sort().map(k => poleCounts[k]),
         backgroundColor: "rgba(239, 68, 68, 0.75)",
         borderColor: "#ef4444",
         borderWidth: 1,
@@ -135,13 +149,42 @@ const Analytics = () => {
     ],
   };
 
-  // Chart 4: Average response times (Bar Chart)
+  // Chart 4: Average response times by Deployed Unit (Bar Chart)
+  // Compute response times per officer/patrol unit from closed/resolved incidents
+  const officerTimes = {};
+  const officerCounts = {};
+  
+  incidents.forEach(inc => {
+    if ((inc.status === "RESOLVED" || inc.status === "SAFE") && inc.createdAt && inc.resolvedAt) {
+      try {
+        const duration = (new Date(inc.resolvedAt) - new Date(inc.createdAt)) / 60000; // in minutes
+        const officer = inc.assignedOfficer || "HQ Command Center";
+        if (duration >= 0) {
+          officerTimes[officer] = (officerTimes[officer] || 0) + duration;
+          officerCounts[officer] = (officerCounts[officer] || 0) + 1;
+        }
+      } catch (e) {
+        console.error("Error calculating response time:", e);
+      }
+    }
+  });
+
+  const officerLabels = Object.keys(officerCounts);
+  const officerAvgs = officerLabels.map(off => {
+    const avg = officerTimes[off] / officerCounts[off];
+    return parseFloat(avg.toFixed(1));
+  });
+
+  // Fallback if no resolved cases exist yet
+  const finalLabels = officerLabels.length > 0 ? officerLabels : ["Inspector Rajesh Kumar", "Officer Priya Sharma", "Officer Amit Patel"];
+  const finalAvgs = officerAvgs.length > 0 ? officerAvgs : [0, 0, 0];
+
   const responseTimesData = {
-    labels: ["Patrol Alpha", "Patrol Delta", "Beat Patrol 4", "Sector 3 Deployed", "Sector 7 Deployed"],
+    labels: finalLabels,
     datasets: [
       {
         label: "Avg Response Time (Minutes)",
-        data: [4.2, 5.8, 3.9, 6.2, 5.1],
+        data: finalAvgs,
         backgroundColor: "rgba(34, 197, 94, 0.75)",
         borderColor: "#22c55e",
         borderWidth: 1,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { getIncidents, getOfficers, updateIncidentStatusInFirestore } from "../services/firestoreService";
+import { subscribeToIncidents, subscribeToOfficers, updateIncidentStatusInFirestore } from "../services/firestoreService";
 import { 
   ShieldAlert, 
   UserPlus, 
@@ -28,23 +28,20 @@ const IncidentManagement = () => {
   const [selectedOfficer, setSelectedOfficer] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
 
-  const loadIncidents = async () => {
-    try {
-      const incData = await getIncidents();
-      setIncidents(incData);
-      
-      const offData = await getOfficers();
-      setOfficers(offData.filter(o => o.status === "Active"));
-    } catch (err) {
-      console.error(err);
-      addToast("Failed to load incidents feed.", "danger");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadIncidents();
+    const unsubIncidents = subscribeToIncidents((incs) => {
+      setIncidents(incs);
+      setLoading(false);
+    });
+
+    const unsubOfficers = subscribeToOfficers((offs) => {
+      setOfficers(offs.filter(o => o.status === "Active"));
+    });
+
+    return () => {
+      unsubIncidents();
+      unsubOfficers();
+    };
   }, []);
 
   const handleAssignSubmit = async (e) => {
@@ -60,7 +57,6 @@ const IncidentManagement = () => {
       addToast(`Officer ${assignedOfficerName} assigned to Case ${targetCase.caseId}`, "success");
       setShowAssignModal(false);
       setSelectedOfficer("");
-      loadIncidents();
     } catch (err) {
       addToast("Failed to reassign officer.", "danger");
     }
@@ -77,7 +73,6 @@ const IncidentManagement = () => {
       addToast(`Case ${targetCase.caseId} resolved successfully.`, "success");
       setShowResolveModal(false);
       setResolutionNotes("");
-      loadIncidents();
     } catch (err) {
       addToast("Failed to resolve incident.", "danger");
     }
@@ -87,7 +82,6 @@ const IncidentManagement = () => {
     try {
       await updateIncidentStatusInFirestore(caseId, "SAFE");
       addToast(`Case ${caseId} archived.`, "info");
-      loadIncidents();
     } catch (err) {
       addToast("Failed to archive case.", "danger");
     }

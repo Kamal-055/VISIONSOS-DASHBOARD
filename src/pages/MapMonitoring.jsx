@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { subscribeToCurrentAlert, subscribeToStreetlights } from "../services/rtdbService";
-import { getOfficers } from "../services/firestoreService";
+import { subscribeToPoliceStations, subscribeToPoliceUnits } from "../services/firestoreService";
 import { Radio, ShieldAlert, Compass } from "lucide-react";
 
 // Inline SVG Pins to avoid Vite Leaflet asset resolution bugs
@@ -69,19 +69,9 @@ const ChangeMapView = ({ center }) => {
 const MapMonitoring = () => {
   const [currentAlert, setCurrentAlert] = useState(null);
   const [streetlights, setStreetlights] = useState({});
-  const [policeStations, setPoliceStations] = useState([
-    { name: "Police HQ Station", lat: 28.6139, lng: 77.2090, details: "Delhi Main Control Hub" },
-    { name: "West Sector Precinct", lat: 28.6210, lng: 77.2010, details: "Sector 3 Patrol Dispatch" },
-    { name: "East Sector Precinct", lat: 28.6100, lng: 77.2220, details: "Sector 7 Patrol Dispatch" }
-  ]);
+  const [policeStations, setPoliceStations] = useState([]);
+  const [policeUnits, setPoliceUnits] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Setup simulated police units
-  const [policeUnits, setPoliceUnits] = useState([
-    { id: "UNIT-1", name: "Patrol Alpha", officer: "Inspector Rajesh Kumar", lat: 28.6120, lng: 77.2050 },
-    { id: "UNIT-2", name: "Patrol Delta", officer: "Officer Priya Sharma", lat: 28.6160, lng: 77.2180 },
-    { id: "UNIT-3", name: "Beat Patrol 4", officer: "Officer Amit Patel", lat: 28.6080, lng: 77.2130 }
-  ]);
 
   useEffect(() => {
     // 1. Subscribe to Live Alerts
@@ -92,12 +82,24 @@ const MapMonitoring = () => {
     // 2. Subscribe to Streetlights
     const unsubLights = subscribeToStreetlights((lights) => {
       setStreetlights(lights);
+    });
+
+    // 3. Subscribe to Police Stations
+    const unsubStations = subscribeToPoliceStations((stations) => {
+      setPoliceStations(stations);
+    });
+
+    // 4. Subscribe to Police Patrol Units
+    const unsubUnits = subscribeToPoliceUnits((units) => {
+      setPoliceUnits(units);
       setLoading(false);
     });
 
     return () => {
       unsubAlert();
       unsubLights();
+      unsubStations();
+      unsubUnits();
     };
   }, []);
 

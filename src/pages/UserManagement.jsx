@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { useNotifications } from "../context/NotificationContext";
-import { getOfficers, createOfficer, updateOfficerDetails, deactivateOfficerAccount } from "../services/firestoreService";
+import { subscribeToOfficers, createOfficer, updateOfficerDetails, deactivateOfficerAccount } from "../services/firestoreService";
 import { 
   Users, 
   UserPlus, 
@@ -57,20 +57,12 @@ const UserManagement = () => {
   const [editPhone, setEditPhone] = useState("");
   const [editStatus, setEditStatus] = useState("Active");
 
-  const loadOfficersList = async () => {
-    try {
-      const data = await getOfficers();
-      setOfficers(data);
-    } catch (err) {
-      console.error(err);
-      addToast("Failed to fetch officers roster.", "danger");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadOfficersList();
+    const unsub = subscribeToOfficers((data) => {
+      setOfficers(data);
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
   const handleAddSubmit = async (e) => {
@@ -111,7 +103,6 @@ const UserManagement = () => {
       addToast(`Officer account created for ${name} (${badgeNumber})`, "success");
       setShowAddModal(false);
       resetAddForm();
-      loadOfficersList();
     } catch (err) {
       console.error(err);
       addToast("Failed to register officer: " + err.message, "danger");
@@ -140,7 +131,6 @@ const UserManagement = () => {
       });
       addToast("Officer configuration updated successfully.", "success");
       setShowEditModal(false);
-      loadOfficersList();
     } catch (err) {
       addToast("Failed to update officer profile.", "danger");
     } finally {
@@ -154,7 +144,6 @@ const UserManagement = () => {
     try {
       await deactivateOfficerAccount(officerId);
       addToast(`Officer account ${officerName} deactivated.`, "info");
-      loadOfficersList();
     } catch (err) {
       addToast("Failed to deactivate account.", "danger");
     }

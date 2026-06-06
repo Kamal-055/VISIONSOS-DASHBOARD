@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
 import { subscribeToCurrentAlert, clearCurrentAlertInRTDB } from "../services/rtdbService";
-import { getOfficers, addSOSHistoryRecord, createIncident } from "../services/firestoreService";
+import { subscribeToOfficers, addSOSHistoryRecord, createIncident } from "../services/firestoreService";
 import { 
   AlertTriangle, 
   MapPin, 
@@ -11,7 +11,8 @@ import {
   Trash2,
   Clock,
   Compass,
-  AlertOctagon
+  AlertOctagon,
+  Radio
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -34,18 +35,15 @@ const LiveAlerts = () => {
       setActiveAlert(alert);
     });
 
-    // Fetch officers list from Firestore
-    const loadOfficers = async () => {
-      try {
-        const data = await getOfficers();
-        setOfficers(data.filter(o => o.status === "Active"));
-      } catch (err) {
-        console.error("Error loading officers:", err);
-      }
-    };
+    // Subscribe to officers list from Firestore in real-time
+    const unsubOfficers = subscribeToOfficers((data) => {
+      setOfficers(data.filter(o => o.status === "Active"));
+    });
 
-    loadOfficers();
-    return () => unsub();
+    return () => {
+      unsub();
+      unsubOfficers();
+    };
   }, []);
 
   const handleAssignOfficerSubmit = async (e) => {

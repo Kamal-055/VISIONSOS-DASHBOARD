@@ -10,7 +10,8 @@ import {
   addDoc, 
   getDoc,
   where,
-  deleteDoc
+  deleteDoc,
+  onSnapshot
 } from "firebase/firestore";
 import { dbFirestore } from "../firebase/firebaseConfig";
 
@@ -352,7 +353,103 @@ export const seedFirestoreData = async () => {
       }
     }
 
+    // Check if police stations are seeded
+    const stationsCol = collection(dbFirestore, "police_stations");
+    const stationsSnap = await getDocs(query(stationsCol, limit(1)));
+    if (stationsSnap.empty) {
+      console.log("Seeding police stations...");
+      const defaultStations = [
+        { name: "Police HQ Station", lat: 28.6139, lng: 77.2090, details: "Delhi Main Control Hub" },
+        { name: "West Sector Precinct", lat: 28.6210, lng: 77.2010, details: "Sector 3 Patrol Dispatch" },
+        { name: "East Sector Precinct", lat: 28.6100, lng: 77.2220, details: "Sector 7 Patrol Dispatch" }
+      ];
+      for (const st of defaultStations) {
+        await addDoc(stationsCol, st);
+      }
+    }
+
+    // Check if police units are seeded
+    const unitsCol = collection(dbFirestore, "police_units");
+    const unitsSnap = await getDocs(query(unitsCol, limit(1)));
+    if (unitsSnap.empty) {
+      console.log("Seeding police patrol units...");
+      const defaultUnits = [
+        { name: "Patrol Alpha", officer: "Inspector Rajesh Kumar", lat: 28.6120, lng: 77.2050 },
+        { name: "Patrol Delta", officer: "Officer Priya Sharma", lat: 28.6160, lng: 77.2180 },
+        { name: "Beat Patrol 4", officer: "Officer Amit Patel", lat: 28.6080, lng: 77.2130 }
+      ];
+      for (const un of defaultUnits) {
+        await addDoc(unitsCol, un);
+      }
+    }
+
   } catch (error) {
     console.error("Error seeding Firestore:", error);
   }
+};
+
+// Real-time Firestore Listeners
+export const subscribeToOfficers = (onUpdate) => {
+  const q = query(collection(dbFirestore, "officers"), orderBy("name"));
+  return onSnapshot(q, (snapshot) => {
+    const officers = [];
+    snapshot.forEach((doc) => {
+      officers.push({ id: doc.id, ...doc.data() });
+    });
+    onUpdate(officers);
+  }, (error) => {
+    console.error("Error subscribing to officers:", error);
+  });
+};
+
+export const subscribeToSOSHistory = (onUpdate) => {
+  const q = query(collection(dbFirestore, "sos_history"), orderBy("timestamp", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const history = [];
+    snapshot.forEach((doc) => {
+      history.push({ id: doc.id, ...doc.data() });
+    });
+    onUpdate(history);
+  }, (error) => {
+    console.error("Error subscribing to SOS history:", error);
+  });
+};
+
+export const subscribeToIncidents = (onUpdate) => {
+  const q = query(collection(dbFirestore, "incident_history"), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const incidents = [];
+    snapshot.forEach((doc) => {
+      incidents.push({ id: doc.id, ...doc.data() });
+    });
+    onUpdate(incidents);
+  }, (error) => {
+    console.error("Error subscribing to incidents:", error);
+  });
+};
+
+export const subscribeToPoliceStations = (onUpdate) => {
+  const q = query(collection(dbFirestore, "police_stations"), orderBy("name"));
+  return onSnapshot(q, (snapshot) => {
+    const stations = [];
+    snapshot.forEach((doc) => {
+      stations.push({ id: doc.id, ...doc.data() });
+    });
+    onUpdate(stations);
+  }, (error) => {
+    console.error("Error subscribing to police stations:", error);
+  });
+};
+
+export const subscribeToPoliceUnits = (onUpdate) => {
+  const q = query(collection(dbFirestore, "police_units"), orderBy("name"));
+  return onSnapshot(q, (snapshot) => {
+    const units = [];
+    snapshot.forEach((doc) => {
+      units.push({ id: doc.id, ...doc.data() });
+    });
+    onUpdate(units);
+  }, (error) => {
+    console.error("Error subscribing to police units:", error);
+  });
 };

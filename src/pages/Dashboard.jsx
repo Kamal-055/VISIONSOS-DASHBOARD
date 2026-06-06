@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
 import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB } from "../services/rtdbService";
-import { getIncidents, getSOSHistory, seedFirestoreData } from "../services/firestoreService";
+import { subscribeToIncidents, subscribeToSOSHistory, seedFirestoreData } from "../services/firestoreService";
 import { 
   ShieldAlert, 
   CheckCircle, 
@@ -40,26 +40,22 @@ const Dashboard = () => {
       setStreetlights(lights);
     });
 
-    // 3. Fetch Firestore incidents & history
-    const loadFirestoreData = async () => {
-      try {
-        const incData = await getIncidents();
-        setIncidents(incData);
-        
-        const histData = await getSOSHistory();
-        setHistoryCount(histData.length);
-      } catch (err) {
-        console.error("Error loading Firestore stats:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // 3. Listen to incidents in real-time
+    const unsubIncidents = subscribeToIncidents((incs) => {
+      setIncidents(incs);
+      setLoading(false);
+    });
 
-    loadFirestoreData();
+    // 4. Listen to SOS history in real-time
+    const unsubHistory = subscribeToSOSHistory((hist) => {
+      setHistoryCount(hist.length);
+    });
 
     return () => {
       unsubAlert();
       unsubStreetlights();
+      unsubIncidents();
+      unsubHistory();
     };
   }, []);
 
@@ -115,13 +111,6 @@ const Dashboard = () => {
     try {
       // Seed Firestore with mockup data if collections are empty
       await seedFirestoreData();
-      
-      // Reload states
-      const incData = await getIncidents();
-      setIncidents(incData);
-      const histData = await getSOSHistory();
-      setHistoryCount(histData.length);
-      
       addToast("Database collections synchronized and seeded successfully.", "success");
     } catch (e) {
       addToast("Sync failed. Check firestore settings.", "danger");

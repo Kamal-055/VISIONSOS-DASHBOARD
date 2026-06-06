@@ -3,6 +3,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, dbFirestore } from "../firebase/firebaseConfig";
 import { getUserProfile } from "../services/authService";
+import { seedFirestoreData } from "../services/firestoreService";
+import { seedDefaultStreetlights } from "../services/rtdbService";
 
 const AuthContext = createContext({
   user: null,
@@ -27,6 +29,10 @@ export const AuthProvider = ({ children }) => {
       if (currentUser) {
         // Retrieve or initialize profile in Firestore
         const userDocRef = doc(dbFirestore, "users", currentUser.uid);
+        
+        // Auto-seed database collections if empty
+        seedFirestoreData().catch(err => console.log("Auto-seeding firestore skipped or failed:", err));
+        seedDefaultStreetlights().catch(err => console.log("Auto-seeding streetlights skipped or failed:", err));
         
         // Listen to changes on the user profile in Firestore
         const unsubProfile = onSnapshot(userDocRef, async (docSnap) => {

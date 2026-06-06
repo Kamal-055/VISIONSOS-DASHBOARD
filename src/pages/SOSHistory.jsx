@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { getSOSHistory } from "../services/firestoreService";
+import { subscribeToSOSHistory } from "../services/firestoreService";
 import { 
   Database, 
   Search, 
@@ -26,21 +26,14 @@ const SOSHistory = () => {
   const [lightFilter, setLightFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
 
-  const loadHistory = async () => {
-    try {
-      const data = await getSOSHistory();
+  useEffect(() => {
+    const unsubHistory = subscribeToSOSHistory((data) => {
       setHistory(data);
       setFilteredHistory(data);
-    } catch (err) {
-      console.error(err);
-      addToast("Failed to load historical incident database.", "danger");
-    } finally {
       setLoading(false);
-    }
-  };
+    });
 
-  useEffect(() => {
-    loadHistory();
+    return () => unsubHistory();
   }, []);
 
   // Apply filters and searches
