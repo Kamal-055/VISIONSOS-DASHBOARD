@@ -1,63 +1,9 @@
 import { ref, onValue, set, update, get, remove } from "firebase/database";
 import { dbRealtime } from "../firebase/firebaseConfig";
 
-// Persistent blacklist of resolved alert UIDs using localStorage with expiration
+// Session-level blacklist of resolved alert UIDs
 // This prevents background coordinate updates from active mobile phones from triggering alarms repeatedly
-const readRawBlacklist = () => {
-  try {
-    const stored = localStorage.getItem("vision_resolved_uids");
-    if (!stored) return {};
-    const blacklist = JSON.parse(stored);
-    
-    const now = Date.now();
-    const activeBlacklist = {};
-    let changed = false;
-    
-    const BLACKLIST_DURATION = 30 * 60 * 1000; // 30 minutes
-    
-    Object.keys(blacklist).forEach(uid => {
-      const resolvedAt = blacklist[uid];
-      if (now - resolvedAt < BLACKLIST_DURATION) {
-        activeBlacklist[uid] = resolvedAt;
-      } else {
-        changed = true;
-      }
-    });
-    
-    if (changed) {
-      localStorage.setItem("vision_resolved_uids", JSON.stringify(activeBlacklist));
-    }
-    
-    return activeBlacklist;
-  } catch (e) {
-    console.error("Error reading raw blacklist:", e);
-    return {};
-  }
-};
-
-const getResolvedUids = () => {
-  return new Set(Object.keys(readRawBlacklist()));
-};
-
-const addResolvedUid = (uid) => {
-  try {
-    const blacklist = readRawBlacklist();
-    blacklist[uid] = Date.now();
-    localStorage.setItem("vision_resolved_uids", JSON.stringify(blacklist));
-  } catch (e) {
-    console.error("Error adding resolved UID to localStorage:", e);
-  }
-};
-
-const removeResolvedUid = (uid) => {
-  try {
-    const blacklist = readRawBlacklist();
-    delete blacklist[uid];
-    localStorage.setItem("vision_resolved_uids", JSON.stringify(blacklist));
-  } catch (e) {
-    console.error("Error removing resolved UID from localStorage:", e);
-  }
-};
+const resolvedUids = new Set();
 
 // ===== LIVE TRACKING SUBSCRIPTIONS =====
 
@@ -66,13 +12,10 @@ export const subscribeToLiveTracking = (onTrackingUpdated) => {
   const trackingRef = ref(dbRealtime, "live_tracking");
   const unsubscribe = onValue(trackingRef, (snapshot) => {
     const data = snapshot.val() || {};
-    const uidsInDb = Object.keys(data);
-    
-    const currentBlacklist = getResolvedUids();
     
     // Filter out blacklisted/resolved UIDs
-    const activeAlerts = uidsInDb
-      .filter(uid => !currentBlacklist.has(uid))
+    const activeAlerts = Object.keys(data)
+      .filter(uid => !resolvedUids.has(uid))
       .map(uid => {
         const item = data[uid];
         return {
@@ -90,8 +33,8 @@ export const subscribeToLiveTracking = (onTrackingUpdated) => {
       });
 
     // Auto-clean database for any incoming coordinate updates on resolved sessions
-    uidsInDb.forEach(uid => {
-      if (currentBlacklist.has(uid)) {
+    Object.keys(data).forEach(uid => {
+      if (resolvedUids.has(uid)) {
         // Silently remove the re-created node to clean up the database
         const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
         remove(trackerRef).catch(e => console.warn("Auto-cleanup of resolved tracker failed:", e));
@@ -134,7 +77,7 @@ export const subscribeToAnalyticsSummary = (onSummaryUpdated) => {
 export const setLiveTrackingAlert = async (uid, alertData) => {
   try {
     // If we are triggering a new simulation, ensure it's removed from blacklist
-    removeResolvedUid(uid);
+    resolvedUids.delete(uid);
 
     const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
     await set(trackerRef, alertData);
@@ -160,7 +103,7 @@ export const setLiveTrackingAlert = async (uid, alertData) => {
 export const clearLiveTrackingAlert = async (uid) => {
   try {
     // Blacklist immediately to prevent race condition notifications on deletion
-    addResolvedUid(uid);
+    resolvedUids.add(uid);
 
     const trackerRef = ref(dbRealtime, `live_tracking/${uid}`);
     await remove(trackerRef);
