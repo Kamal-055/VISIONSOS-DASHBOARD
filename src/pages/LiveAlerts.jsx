@@ -353,7 +353,7 @@ const LiveAlerts = () => {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center p-6">
-            <Radio className="w-12 h-12 text-slate-700 mb-4 animate-ping" />
+            <Radio className="w-12 h-12 text-slate-400 mb-4 animate-ping" />
             <h3 className="font-display font-bold text-sm uppercase text-slate-400 tracking-wider">
               CAD Channels Quiet
             </h3>

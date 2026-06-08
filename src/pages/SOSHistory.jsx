@@ -227,7 +227,7 @@ const SOSHistory = () => {
       </div>
 
       {/* Main Print Header (only visible when printing) */}
-      <div className="hidden print:block text-slate-900 border-b-2 border-slate-900 pb-4 mb-6">
+      <div className="hidden print:block text-zinc-900 border-b-2 border-zinc-900 pb-4 mb-6">
         <h1 className="font-bold text-xl uppercase tracking-wider">VISION SOS EMERGENCY AUDIT REPORT</h1>
         <p className="text-xs font-mono">Date Generated: {new Date().toLocaleString()} // Filtered Cases: {filteredHistory.length}</p>
       </div>
@@ -242,7 +242,7 @@ const SOSHistory = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse print:text-black">
               <thead>
-                <tr className="bg-slate-900 border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-gray-400 print:bg-slate-200 print:text-slate-800 print:border-slate-800">
+                <tr className="bg-slate-900 border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-gray-400 print:bg-zinc-200 print:text-zinc-800 print:border-zinc-800">
                   <th className="p-4">Alert ID</th>
                   <th className="p-4">Citizen</th>
                   <th className="p-4">Nearest Pole</th>
@@ -253,21 +253,21 @@ const SOSHistory = () => {
                   <th className="p-4">Resolution Summary</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-brand-border text-xs print:divide-slate-300">
+              <tbody className="divide-y divide-brand-border text-xs print:divide-zinc-300">
                 {filteredHistory.map((h) => (
-                  <tr key={h.id} className="hover:bg-slate-900/40 text-gray-300 print:text-slate-900">
+                  <tr key={h.id} className="hover:bg-slate-900/40 text-gray-300 print:text-zinc-900">
                     <td className="p-4 font-mono font-bold text-brand-primary print:text-blue-800">{h.alertId}</td>
                     <td className="p-4">
                       <div className="font-semibold">{h.userName}</div>
-                      <div className="text-[10px] text-gray-500 print:text-slate-500 font-mono">{h.phone}</div>
+                      <div className="text-[10px] text-gray-500 print:text-zinc-500 font-mono">{h.phone}</div>
                     </td>
                     <td className="p-4 font-mono">
                       {h.nearestLight || "SL1"} <span className="text-slate-500 font-normal">({h.distance || "0m"})</span>
                     </td>
-                    <td className="p-4 font-mono text-[10px] text-gray-400 print:text-slate-600">
+                    <td className="p-4 font-mono text-[10px] text-gray-400 print:text-zinc-600">
                       {h.latitude?.toFixed(4)}, {h.longitude?.toFixed(4)}
                     </td>
-                    <td className="p-4 text-gray-400 print:text-slate-600">
+                    <td className="p-4 text-gray-400 print:text-zinc-600">
                       {new Date(h.timestamp).toLocaleString()}
                     </td>
                     <td className="p-4">
@@ -282,7 +282,7 @@ const SOSHistory = () => {
                       </span>
                     </td>
                     <td className="p-4 font-medium">{h.resolvedBy || "N/A"}</td>
-                    <td className="p-4 text-gray-400 print:text-slate-600 max-w-xs truncate" title={h.resolutionNotes}>
+                    <td className="p-4 text-gray-400 print:text-zinc-600 max-w-xs truncate" title={h.resolutionNotes}>
                       {h.resolutionNotes || "No notes logged."}
                     </td>
                   </tr>
@@ -292,7 +292,7 @@ const SOSHistory = () => {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Database className="w-12 h-12 text-slate-700 mb-4" />
+            <Database className="w-12 h-12 text-slate-400 mb-4" />
             <h3 className="font-display font-bold text-sm uppercase text-slate-400 tracking-wider">
               No Archives Registered
             </h3>

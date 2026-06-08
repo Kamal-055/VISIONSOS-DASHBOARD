@@ -18,6 +18,7 @@ import {
 import { subscribeToIncidents } from "../services/firestoreService";
 import { subscribeToStreetlights, subscribeToRTDBSOSHistory } from "../services/rtdbService";
 import { useTheme } from "../context/ThemeContext";
+import { useNotifications } from "../context/NotificationContext";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -266,7 +267,7 @@ class RandomForest {
 }
 
 // Custom DivIcons for visual Leaflet markers to prevent asset hashing errors
-const createPulsingCenterIcon = (color) => new L.DivIcon({
+const createPulsingCenterIcon = (color) => L.divIcon({
   className: "custom-leaflet-pulsing-marker",
   html: `<div class='w-5 h-5 rounded-full border-2 border-white shadow-xl flex items-center justify-center animate-ping' style='background-color: ${color}'></div>`,
   iconSize: [20, 20],
@@ -733,37 +734,37 @@ const Analytics = () => {
       
       {/* Printable Verification Report Shell (Only visible on browser PDF Print) */}
       <div className="hidden print:block text-black bg-white p-8 space-y-6 font-serif">
-        <div className="border-b-4 border-slate-900 pb-4 text-center">
+        <div className="border-b-4 border-black pb-4 text-center">
           <h1 className="text-2xl font-extrabold tracking-wide uppercase">VISION SOS AUDIT & ML VERIFICATION REPORT</h1>
-          <p className="text-xs font-mono text-slate-600 mt-1">Vision Bengaluru Command Center // Verification Protocol Document</p>
-          <p className="text-xs font-mono text-slate-600">Generated: {new Date().toLocaleString()} // Authority: Inspector General</p>
+          <p className="text-xs font-mono text-zinc-600 mt-1">Vision Bengaluru Command Center // Verification Protocol Document</p>
+          <p className="text-xs font-mono text-zinc-600">Generated: {new Date().toLocaleString()} // Authority: Inspector General</p>
         </div>
 
         <div className="space-y-4">
           <h3 className="text-base font-bold underline">1. Database Audit Summary</h3>
-          <table className="w-full text-left border-collapse border border-slate-400 text-xs">
+          <table className="w-full text-left border-collapse border border-zinc-400 text-xs">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 p-2">Metric</th>
-                <th className="border border-slate-400 p-2">Value</th>
-                <th className="border border-slate-400 p-2">Source Collection</th>
+              <tr className="bg-zinc-100">
+                <th className="border border-zinc-400 p-2">Metric</th>
+                <th className="border border-zinc-400 p-2">Value</th>
+                <th className="border border-zinc-400 p-2">Source Collection</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td className="border border-slate-400 p-2 font-mono">Total Distress Signals</td>
-                <td className="border border-slate-400 p-2">{history.length}</td>
-                <td className="border border-slate-400 p-2 font-mono">rtdb/sos_history</td>
+                <td className="border border-zinc-400 p-2 font-mono">Total Distress Signals</td>
+                <td className="border border-zinc-400 p-2">{history.length}</td>
+                <td className="border border-zinc-400 p-2 font-mono">rtdb/sos_history</td>
               </tr>
               <tr>
-                <td className="border border-slate-400 p-2 font-mono">Active Incidents</td>
-                <td className="border border-slate-400 p-2">{dbscanClusters["Noise"] ? history.length - dbscanNoisePoints.length : 0}</td>
-                <td className="border border-slate-400 p-2 font-mono">rtdb/active_incidents</td>
+                <td className="border border-zinc-400 p-2 font-mono">Active Incidents</td>
+                <td className="border border-zinc-400 p-2">{dbscanClusters["Noise"] ? history.length - dbscanNoisePoints.length : 0}</td>
+                <td className="border border-zinc-400 p-2 font-mono">rtdb/active_incidents</td>
               </tr>
               <tr>
-                <td className="border border-slate-400 p-2 font-mono">Total Resolved Dispatches</td>
-                <td className="border border-slate-400 p-2">{incidents.filter(i => i.status === "RESOLVED").length}</td>
-                <td className="border border-slate-400 p-2 font-mono">firestore/incident_history</td>
+                <td className="border border-zinc-400 p-2 font-mono">Total Resolved Dispatches</td>
+                <td className="border border-zinc-400 p-2">{incidents.filter(i => i.status === "RESOLVED").length}</td>
+                <td className="border border-zinc-400 p-2 font-mono">firestore/incident_history</td>
               </tr>
             </tbody>
           </table>
@@ -774,29 +775,29 @@ const Analytics = () => {
           <p className="text-xs">
             DBSCAN spatial analysis was conducted using radius ($\epsilon$) of {epsValue}km and minimum density of {minPtsValue} coordinates.
           </p>
-          <table className="w-full text-left border-collapse border border-slate-400 text-xs">
+          <table className="w-full text-left border-collapse border border-zinc-400 text-xs">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 p-2">Cluster Name</th>
-                <th className="border border-slate-400 p-2">Latitude</th>
-                <th className="border border-slate-400 p-2">Longitude</th>
-                <th className="border border-slate-400 p-2">Incident Count</th>
+              <tr className="bg-zinc-100">
+                <th className="border border-zinc-400 p-2">Cluster Name</th>
+                <th className="border border-zinc-400 p-2">Latitude</th>
+                <th className="border border-zinc-400 p-2">Longitude</th>
+                <th className="border border-zinc-400 p-2">Incident Count</th>
               </tr>
             </thead>
             <tbody>
               {clusterCenters.map((c) => (
                 <tr key={c.name}>
-                  <td className="border border-slate-400 p-2">{c.name}</td>
-                  <td className="border border-slate-400 p-2">{c.lat.toFixed(5)}</td>
-                  <td className="border border-slate-400 p-2">{c.lng.toFixed(5)}</td>
-                  <td className="border border-slate-400 p-2 font-bold">{c.size} alerts</td>
+                  <td className="border border-zinc-400 p-2">{c.name}</td>
+                  <td className="border border-zinc-400 p-2">{c.lat.toFixed(5)}</td>
+                  <td className="border border-zinc-400 p-2">{c.lng.toFixed(5)}</td>
+                  <td className="border border-zinc-400 p-2 font-bold">{c.size} alerts</td>
                 </tr>
               ))}
               <tr>
-                <td className="border border-slate-400 p-2">Noise Points (Isolated)</td>
-                <td className="border border-slate-400 p-2">-</td>
-                <td className="border border-slate-400 p-2">-</td>
-                <td className="border border-slate-400 p-2">{dbscanNoisePoints.length} alerts</td>
+                <td className="border border-zinc-400 p-2">Noise Points (Isolated)</td>
+                <td className="border border-zinc-400 p-2">-</td>
+                <td className="border border-zinc-400 p-2">-</td>
+                <td className="border border-zinc-400 p-2">{dbscanNoisePoints.length} alerts</td>
               </tr>
             </tbody>
           </table>
@@ -817,20 +818,20 @@ const Analytics = () => {
 
         <div className="space-y-4">
           <h3 className="text-base font-bold underline">4. Response Force Standings</h3>
-          <table className="w-full text-left border-collapse border border-slate-400 text-xs">
+          <table className="w-full text-left border-collapse border border-zinc-400 text-xs">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="border border-slate-400 p-2">Officer Name</th>
-                <th className="border border-slate-400 p-2">Total Dispatches</th>
-                <th className="border border-slate-400 p-2">Average Response Speed</th>
+              <tr className="bg-zinc-100">
+                <th className="border border-zinc-400 p-2">Officer Name</th>
+                <th className="border border-zinc-400 p-2">Total Dispatches</th>
+                <th className="border border-zinc-400 p-2">Average Response Speed</th>
               </tr>
             </thead>
             <tbody>
               {officerMetrics.map((o) => (
                 <tr key={o.name}>
-                  <td className="border border-slate-400 p-2 font-semibold">{o.name}</td>
-                  <td className="border border-slate-400 p-2">{o.cases} cases</td>
-                  <td className="border border-slate-400 p-2">{o.avg} min</td>
+                  <td className="border border-zinc-400 p-2 font-semibold">{o.name}</td>
+                  <td className="border border-zinc-400 p-2">{o.cases} cases</td>
+                  <td className="border border-zinc-400 p-2">{o.avg} min</td>
                 </tr>
               ))}
             </tbody>
@@ -1123,7 +1124,7 @@ const Analytics = () => {
                         }}
                       >
                         <Popup>
-                          <div className="text-xs font-mono text-slate-800">
+                          <div className="text-xs font-mono text-brand-text">
                             <strong>Density Risk Zone:</strong> {g.riskClass}<br/>
                             <strong>Probability:</strong> {(g.intensity * 100).toFixed(0)}%
                           </div>
@@ -1168,7 +1169,7 @@ const Analytics = () => {
                           }}
                         >
                           <Popup>
-                            <div className="text-xs text-slate-800 font-mono">
+                            <div className="text-xs text-brand-text font-mono">
                               <strong>Citizen:</strong> {p.userName}<br/>
                               <strong>Distress ID:</strong> {p.id}<br/>
                               <strong>Streetlight:</strong> {p.nearestLight}<br/>
@@ -1187,7 +1188,7 @@ const Analytics = () => {
                         icon={createPulsingCenterIcon(c.color)}
                       >
                         <Popup>
-                          <div className="text-xs text-slate-800 font-mono">
+                          <div className="text-xs text-brand-text font-mono">
                             <strong>Cluster Center:</strong> {c.name}<br/>
                             <strong>Density Size:</strong> {c.size} incidents<br/>
                             <strong>Coordinates:</strong> {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
@@ -1210,7 +1211,7 @@ const Analytics = () => {
                         }}
                       >
                         <Popup>
-                          <div className="text-xs text-slate-800 font-mono">
+                          <div className="text-xs text-brand-text font-mono">
                             <strong>Isolated Alert</strong><br/>
                             <strong>Distress ID:</strong> {p.id}<br/>
                             <strong>Citizen:</strong> {p.userName}
