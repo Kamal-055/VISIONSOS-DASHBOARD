@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
+import { useTheme } from "../context/ThemeContext";
 import { seedDefaultStreetlights, updateStreetlight } from "../services/rtdbService";
 import { 
   Settings as SettingsIcon, 
@@ -16,6 +17,7 @@ import {
 
 const Settings = () => {
   const { addToast } = useNotifications();
+  const { theme, setTheme } = useTheme();
 
   // Load preferences from local storage or set defaults
   const [volume, setVolume] = useState(() => Number(localStorage.getItem("settings_alarm_volume") || 50));
@@ -175,6 +177,24 @@ const Settings = () => {
                   className="w-full px-3 py-2 bg-slate-950 border border-brand-border focus:border-brand-primary rounded-lg text-xs text-brand-text focus:outline-none"
                   required
                 />
+              </div>
+            </div>
+
+            {/* Theme Selection */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-brand-border/30">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                  Theme Preference
+                </label>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-brand-border focus:border-brand-primary rounded-lg text-xs text-brand-text focus:outline-none"
+                >
+                  <option value="light">Light Mode</option>
+                  <option value="dark">Dark Mode</option>
+                  <option value="system">System Mode</option>
+                </select>
               </div>
             </div>
 

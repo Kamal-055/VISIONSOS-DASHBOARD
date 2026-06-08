@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB } from "../services/rtdbService";
-import { subscribeToIncidents, subscribeToSOSHistory, seedFirestoreData } from "../services/firestoreService";
+import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB, subscribeToRTDBSOSHistory, seedDefaultStreetlights } from "../services/rtdbService";
+import { subscribeToIncidents, seedFirestoreData } from "../services/firestoreService";
 import { 
   ShieldAlert, 
   CheckCircle, 
@@ -47,7 +47,7 @@ const Dashboard = () => {
     });
 
     // 4. Listen to SOS history in real-time
-    const unsubHistory = subscribeToSOSHistory((hist) => {
+    const unsubHistory = subscribeToRTDBSOSHistory((hist) => {
       setHistoryCount(hist.length);
     });
 
@@ -149,19 +149,29 @@ const Dashboard = () => {
     try {
       // Seed Firestore with mockup data if collections are empty
       await seedFirestoreData();
-      addToast("Database collections synchronized and seeded successfully.", "success");
+      // Seed/overwrite Realtime Database streetlights with Bangalore-aligned coordinates
+      await seedDefaultStreetlights();
+      addToast("Database collections and streetlights seeded successfully.", "success");
     } catch (e) {
-      addToast("Sync failed. Check firestore settings.", "danger");
+      addToast("Sync failed. Check database settings.", "danger");
     } finally {
       setSyncing(false);
     }
   };
 
   const handleResolveAlert = async () => {
+    if (!currentAlert) return;
     try {
-      await clearCurrentAlertInRTDB();
+      await clearCurrentAlertInRTDB(currentAlert.alertId || currentAlert.id, {
+        status: "RESOLVED",
+        resolvedBy: "HQ Command Center",
+        resolutionNotes: "Alert marked resolved from Dashboard.",
+        nearestLight: currentAlert.nearestLight || nearestPoleInfo.id,
+        distance: currentAlert.distance || nearestPoleInfo.distance
+      });
       addToast("Active SOS alert cleared from live channel.", "success");
     } catch (e) {
+      addToast("Failed to resolve alert.", "danger");
       console.error(e);
     }
   };

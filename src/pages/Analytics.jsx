@@ -13,8 +13,8 @@ import {
   Legend,
   Filler
 } from "chart.js";
-import { subscribeToIncidents, subscribeToSOSHistory } from "../services/firestoreService";
-import { subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToIncidents } from "../services/firestoreService";
+import { subscribeToStreetlights, subscribeToRTDBSOSHistory } from "../services/rtdbService";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -304,7 +304,7 @@ const Analytics = () => {
       setLoading(false);
     });
 
-    const unsubHistory = subscribeToSOSHistory((hist) => {
+    const unsubHistory = subscribeToRTDBSOSHistory((hist) => {
       setHistory(hist);
     });
 

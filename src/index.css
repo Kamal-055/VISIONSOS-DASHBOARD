@@ -1,15 +1,146 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
-@theme {
+:root {
+  /* Common variables (Light theme defaults) */
+  --slate-50: #0f172a;
+  --slate-100: #1e293b;
+  --slate-200: #334155;
+  --slate-300: #475569;
+  --slate-400: #64748b;
+  --slate-500: #94a3b8;
+  --slate-600: #cbd5e1;
+  --slate-700: #e2e8f0;
+  --slate-800: #f1f5f9;
+  --slate-900: #f8fafc;
+  --slate-950: #ffffff;
+
+  --gray-50: #09090b;
+  --gray-100: #18181b;
+  --gray-200: #27272a;
+  --gray-300: #3f3f46;
+  --gray-400: #52525b;
+  --gray-500: #71717a;
+  --gray-600: #a1a1aa;
+  --gray-700: #d4d4d8;
+  --gray-800: #e4e4e7;
+  --gray-900: #f4f4f5;
+  --gray-950: #fafafa;
+  
+  --color-brand-bg: #f8fafc;
+  --color-brand-card: #ffffff;
+  --color-brand-text: #0f172a;
+  --color-brand-border: #e2e8f0;
+  
   --color-brand-primary: #2563EB;
   --color-brand-danger: #EF4444;
   --color-brand-success: #22C55E;
   --color-brand-warning: #F59E0B;
+}
+
+/* Force light selector */
+.light {
+  --slate-50: #0f172a;
+  --slate-100: #1e293b;
+  --slate-200: #334155;
+  --slate-300: #475569;
+  --slate-400: #64748b;
+  --slate-500: #94a3b8;
+  --slate-600: #cbd5e1;
+  --slate-700: #e2e8f0;
+  --slate-800: #f1f5f9;
+  --slate-900: #f8fafc;
+  --slate-950: #ffffff;
+
+  --gray-50: #09090b;
+  --gray-100: #18181b;
+  --gray-200: #27272a;
+  --gray-300: #3f3f46;
+  --gray-400: #52525b;
+  --gray-500: #71717a;
+  --gray-600: #a1a1aa;
+  --gray-700: #d4d4d8;
+  --gray-800: #e4e4e7;
+  --gray-900: #f4f4f5;
+  --gray-950: #fafafa;
+
+  --color-brand-bg: #f8fafc;
+  --color-brand-card: #ffffff;
+  --color-brand-text: #0f172a;
+  --color-brand-border: #e2e8f0;
+}
+
+/* Force dark selector */
+.dark {
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
+
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+  --gray-950: #09090b;
+
   --color-brand-bg: #0F172A;
   --color-brand-card: #1E293B;
   --color-brand-text: #F8FAFC;
   --color-brand-border: #334155;
+}
+
+html, body {
+  background-color: var(--color-brand-bg);
+  color: var(--color-brand-text);
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+@theme {
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
+
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
+  --color-gray-950: var(--gray-950);
+
+  --color-brand-primary: var(--color-brand-primary);
+  --color-brand-danger: var(--color-brand-danger);
+  --color-brand-success: var(--color-brand-success);
+  --color-brand-warning: var(--color-brand-warning);
+  --color-brand-bg: var(--color-brand-bg);
+  --color-brand-card: var(--color-brand-card);
+  --color-brand-text: var(--color-brand-text);
+  --color-brand-border: var(--color-brand-border);
   
   --font-display: "Outfit", sans-serif;
   --font-sans: "Inter", sans-serif;
@@ -22,16 +153,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--color-brand-bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--color-slate-800);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2563eb;
+  background: var(--color-brand-primary);
 }
 
 /* Siren Blinking Alert Banner */
@@ -76,41 +207,43 @@
 
 /* Leaflet map styling overrides to match dark theme */
 .leaflet-container {
-  background: #0f172a !important;
+  background: var(--color-brand-bg) !important;
   font-family: inherit;
 }
 
 .leaflet-bar {
-  border: 1px solid #334155 !important;
+  border: 1px solid var(--color-brand-border) !important;
 }
 
 .leaflet-bar a {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-bottom: 1px solid #334155 !important;
+  background-color: var(--color-brand-card) !important;
+  color: var(--color-brand-text) !important;
+  border-bottom: 1px solid var(--color-brand-border) !important;
 }
 
 .leaflet-bar a:hover {
-  background-color: #2563eb !important;
+  background-color: var(--color-brand-primary) !important;
+  color: #ffffff !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: #1e293b !important;
-  color: #f8fafc !important;
-  border: 1px solid #334155 !important;
+  background: var(--color-brand-card) !important;
+  color: var(--color-brand-text) !important;
+  border: 1px solid var(--color-brand-border) !important;
   border-radius: 8px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
 }
 
 .leaflet-popup-tip {
-  background: #1e293b !important;
-  border: 1px solid #334155 !important;
+  background: var(--color-brand-card) !important;
+  border: 1px solid var(--color-brand-border) !important;
 }
 
 /* Grid overlay background to feel futuristic */
 .bg-grid-cyber {
   background-size: 40px 40px;
   background-image: 
-    linear-gradient(to right, rgba(51, 65, 85, 0.15) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(51, 65, 85, 0.15) 1px, transparent 1px);
+    linear-gradient(to right, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
 }
+

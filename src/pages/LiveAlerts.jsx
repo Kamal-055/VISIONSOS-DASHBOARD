@@ -135,7 +135,13 @@ const LiveAlerts = () => {
       });
 
       // Clear alert from live feed
-      await clearCurrentAlertInRTDB(activeAlert.alertId);
+      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+        status: "IN_PROGRESS",
+        resolvedBy: assignedOfficerName,
+        resolutionNotes: `Assigned case to officer: ${assignedOfficerName}. Dispatch ID: ${newCaseId}`,
+        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
+        distance: activeAlert.distance || nearestPoleInfo.distance
+      });
       setSirenPlaying(false);
       setShowAssignModal(false);
       setSelectedOfficer("");
@@ -166,8 +172,14 @@ const LiveAlerts = () => {
         resolutionNotes: resolutionNotes || `Alert marked as ${resolveType} by dispatcher.`
       });
 
-      // Clear from RTDB
-      await clearCurrentAlertInRTDB(activeAlert.alertId);
+      // Clear from RTDB with full details
+      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+        status: resolveType,
+        resolvedBy: "HQ Command Center",
+        resolutionNotes: resolutionNotes || `Alert marked as ${resolveType} by dispatcher.`,
+        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
+        distance: activeAlert.distance || nearestPoleInfo.distance
+      });
       setSirenPlaying(false);
       setShowResolveModal(false);
       setResolutionNotes("");
@@ -180,7 +192,11 @@ const LiveAlerts = () => {
   const handleDeleteAlert = async () => {
     if (!window.confirm("Are you sure you want to delete this live alert? This action clears the live broadcast without saving history.")) return;
     try {
-      await clearCurrentAlertInRTDB(activeAlert.alertId);
+      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+        status: "RESOLVED",
+        resolvedBy: "HQ Command Center",
+        resolutionNotes: "Live active alert signal discarded."
+      });
       setSirenPlaying(false);
       addToast("Live alert deleted from channel.", "info");
     } catch (e) {

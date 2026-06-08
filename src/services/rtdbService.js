@@ -129,7 +129,7 @@ export const setCurrentAlert = async (alertData) => {
 };
 
 // 7. Clear/resolve current active SOS alert in RTDB
-export const clearCurrentAlertInRTDB = async (alertId = null) => {
+export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
   try {
     const historyRef = ref(dbRealtime, "sos_history");
     const snapshot = await get(historyRef);
@@ -153,8 +153,11 @@ export const clearCurrentAlertInRTDB = async (alertId = null) => {
     if (targetKey) {
       const alertRef = ref(dbRealtime, `sos_history/${targetKey}`);
       await update(alertRef, { 
-        status: "RESOLVED", 
-        resolvedAt: new Date().toISOString() 
+        status: updates.status || "RESOLVED", 
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: updates.resolvedBy || "HQ Command Center",
+        resolutionNotes: updates.resolutionNotes || "Alert cleared by dispatcher.",
+        ...updates
       });
     }
   } catch (error) {

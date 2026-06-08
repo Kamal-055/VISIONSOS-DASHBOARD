@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotifications } from "../../context/NotificationContext";
+import { useTheme } from "../../context/ThemeContext";
 import { 
   Volume2, 
   VolumeX, 
@@ -8,7 +9,10 @@ import {
   ShieldAlert, 
   User, 
   Radio, 
-  LogOut 
+  LogOut,
+  Sun,
+  Moon,
+  Monitor
 } from "lucide-react";
 import { logoutUser } from "../../services/authService";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 const Navbar = ({ toggleSidebar }) => {
   const { profile } = useAuth();
   const { isMuted, setMuted, isSirenPlaying, activeSOSAlerts } = useNotifications();
+  const { theme, setTheme } = useTheme();
   const [time, setTime] = useState(new Date());
   const navigate = useNavigate();
 
@@ -92,7 +97,7 @@ const Navbar = ({ toggleSidebar }) => {
           </div>
         </div>
 
-        {/* Right Section: Time, Siren status, Profile */}
+        {/* Right Section: Time, Siren status, Theme Switcher, Profile */}
         <div className="flex items-center gap-6">
           {/* Time Module */}
           <div className="hidden lg:flex items-center gap-2.5 font-mono text-xs text-gray-400 border-r border-brand-border pr-6">
@@ -118,6 +123,26 @@ const Navbar = ({ toggleSidebar }) => {
             </button>
             <span className="text-[10px] font-mono tracking-widest text-gray-400 uppercase hidden sm:inline select-none">
               {isMuted ? "MUTED" : isSirenPlaying ? "ALARM RINGING" : "MONITORING"}
+            </span>
+          </div>
+
+          {/* Theme switcher */}
+          <div className="flex items-center gap-2 border-r border-brand-border pr-6">
+            <button
+              onClick={() => {
+                if (theme === "light") setTheme("dark");
+                else if (theme === "dark") setTheme("system");
+                else setTheme("light");
+              }}
+              className="flex items-center justify-center p-2 rounded-lg border bg-slate-800 border-brand-border text-gray-400 hover:text-brand-text hover:bg-slate-700 cursor-pointer transition-all duration-200"
+              title={`Theme: ${theme === "light" ? "Light Mode" : theme === "dark" ? "Dark Mode" : "System Mode"}`}
+            >
+              {theme === "light" && <Sun size={18} className="text-amber-500 animate-spin" style={{ animationDuration: '10s' }} />}
+              {theme === "dark" && <Moon size={18} className="text-blue-400" />}
+              {theme === "system" && <Monitor size={18} />}
+            </button>
+            <span className="text-[10px] font-mono tracking-widest text-gray-400 uppercase hidden sm:inline select-none">
+              {theme === "light" ? "LIGHT" : theme === "dark" ? "DARK" : "SYSTEM"}
             </span>
           </div>
 

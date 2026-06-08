@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToSOSHistory } from "../services/firestoreService";
+import { subscribeToRTDBSOSHistory } from "../services/rtdbService";
 import { 
   Database, 
   Search, 
@@ -27,7 +27,7 @@ const SOSHistory = () => {
   const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
-    const unsubHistory = subscribeToSOSHistory((data) => {
+    const unsubHistory = subscribeToRTDBSOSHistory((data) => {
       setHistory(data);
       setFilteredHistory(data);
       setLoading(false);

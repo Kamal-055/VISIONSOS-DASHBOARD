@@ -4,6 +4,7 @@ import L from "leaflet";
 import { subscribeToCurrentAlert, subscribeToStreetlights, subscribeToLiveTracking } from "../services/rtdbService";
 import { subscribeToPoliceStations, subscribeToPoliceUnits } from "../services/firestoreService";
 import { Radio, ShieldAlert, Compass } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
 
 // Inline SVG Pins to avoid Vite Leaflet asset resolution bugs
 const createSVGIcon = (color, type) => {
@@ -67,6 +68,7 @@ const ChangeMapView = ({ center }) => {
 };
 
 const MapMonitoring = () => {
+  const { resolvedTheme } = useTheme();
   const [currentAlert, setCurrentAlert] = useState(null);
   const [streetlights, setStreetlights] = useState({});
   const [policeStations, setPoliceStations] = useState([]);
@@ -172,10 +174,13 @@ const MapMonitoring = () => {
           scrollWheelZoom={true}
           style={{ height: "100%", width: "100%" }}
         >
-          {/* Dark Mode CartoDB TileLayer (Premium cyber style) */}
+          {/* CartoDB TileLayer dynamically adapted to current theme */}
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url={resolvedTheme === "light" 
+              ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            }
           />
 
           <ChangeMapView center={sosPosition} />
