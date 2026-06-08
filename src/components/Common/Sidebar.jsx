@@ -44,6 +44,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     { name: "User Management", path: "/users", icon: Users, adminOnly: true },
     { name: "Settings", path: "/settings", icon: Settings },
     { name: "Profile", path: "/profile", icon: UserCircle },
+    { name: "About", path: "/about", icon: Shield },
   ];
 
   return (
@@ -53,35 +54,39 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
       className="flex flex-col h-screen bg-brand-card border-r border-brand-border text-brand-text select-none shrink-0"
     >
       {/* Brand Logo & Title */}
-      <div className="flex items-center justify-between p-4 border-b border-brand-border h-[64px]">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex items-center justify-center p-2 rounded-lg bg-blue-600/10 text-brand-primary border border-blue-500/20 shrink-0">
-            <Shield className="w-5 h-5 text-blue-500 animate-pulse" />
-          </div>
-          {!isCollapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col whitespace-nowrap"
+      <div className="flex flex-col items-center justify-center py-4 border-b border-brand-border shrink-0 select-none">
+        <img 
+          src="/logo.jpg" 
+          alt="VISION Logo" 
+          className="w-10 h-10 rounded-lg shadow-md border border-brand-border object-contain bg-slate-950" 
+        />
+        {!isCollapsed ? (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mt-2 flex flex-col items-center justify-center relative"
+          >
+            <span className="font-display font-black text-sm tracking-widest uppercase text-blue-400 block">
+              VISION SOS
+            </span>
+            <span className="text-[9px] text-gray-400 tracking-widest uppercase block">
+              Control Room
+            </span>
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="absolute -right-12 top-0.5 flex items-center justify-center p-1 rounded-md border border-brand-border bg-slate-800/50 hover:bg-slate-700/50 text-gray-400 hover:text-brand-text cursor-pointer"
             >
-              <span className="font-display font-bold text-sm tracking-wider uppercase text-blue-400">
-                Vision SOS
-              </span>
-              <span className="text-[10px] text-gray-400 tracking-widest uppercase">
-                Control Room
-              </span>
-            </motion.div>
-          )}
-        </div>
-        
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden md:flex items-center justify-center p-1.5 rounded-lg border border-brand-border bg-slate-800/50 hover:bg-slate-700/50 text-gray-400 hover:text-brand-text cursor-pointer"
-        >
-          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+              <ChevronLeft size={12} />
+            </button>
+          </motion.div>
+        ) : (
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="mt-2.5 flex items-center justify-center p-1 rounded-md border border-brand-border bg-slate-800/50 hover:bg-slate-700/50 text-gray-400 hover:text-brand-text cursor-pointer"
+          >
+            <ChevronRight size={12} />
+          </button>
+        )}
       </div>
 
       {/* Navigation Links */}

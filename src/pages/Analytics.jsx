@@ -734,7 +734,8 @@ const Analytics = () => {
       
       {/* Printable Verification Report Shell (Only visible on browser PDF Print) */}
       <div className="hidden print:block text-black bg-white p-8 space-y-6 font-serif">
-        <div className="border-b-4 border-black pb-4 text-center">
+        <div className="border-b-4 border-black pb-4 text-center flex flex-col items-center justify-center">
+          <img src="/logo.jpg" alt="VISION Logo" className="w-16 h-16 mb-2 object-contain" />
           <h1 className="text-2xl font-extrabold tracking-wide uppercase">VISION SOS AUDIT & ML VERIFICATION REPORT</h1>
           <p className="text-xs font-mono text-zinc-600 mt-1">Vision Bengaluru Command Center // Verification Protocol Document</p>
           <p className="text-xs font-mono text-zinc-600">Generated: {new Date().toLocaleString()} // Authority: Inspector General</p>

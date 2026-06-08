@@ -12,8 +12,8 @@ const NotFound = () => {
         {/* Futuristic radar sweep animation */}
         <div className="absolute top-0 left-0 w-full h-[3px] bg-blue-500/20 blur-[1px] animate-pulse"></div>
 
-        <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-600/10 border border-red-500/20 text-brand-danger mb-6">
-          <ShieldAlert className="w-12 h-12 animate-bounce" />
+        <div className="inline-flex items-center justify-center mb-6">
+          <img src="/logo.jpg" alt="VISION Logo" className="w-16 h-16 rounded-xl border border-brand-border object-contain bg-slate-950 animate-pulse" />
         </div>
 
         <h1 className="font-display font-extrabold text-6xl tracking-tighter text-red-500 mb-2">

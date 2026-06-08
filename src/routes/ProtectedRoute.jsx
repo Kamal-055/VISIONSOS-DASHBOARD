@@ -8,12 +8,21 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-brand-bg text-brand-text">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm tracking-wider font-semibold animate-pulse text-blue-400 uppercase">
-            Securing Control Room Session...
-          </p>
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-950 text-brand-text">
+        <div className="flex flex-col items-center gap-6">
+          <img 
+            src="/logo.jpg" 
+            alt="VISION Logo" 
+            className="w-24 h-24 rounded-2xl shadow-2xl border-2 border-slate-800 object-contain bg-slate-950 animate-logo-pulse" 
+          />
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="font-display font-black text-xl tracking-widest text-brand-text uppercase">
+              VISION SOS
+            </h1>
+            <p className="text-xs font-mono tracking-widest text-blue-500 uppercase animate-pulse">
+              Securing Control Room Session...
+            </p>
+          </div>
         </div>
       </div>
     );

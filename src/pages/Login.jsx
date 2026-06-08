@@ -64,16 +64,22 @@ const Login = () => {
 
   return (
     <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden backdrop-blur-md">
-      {/* Header section */}
-      <div className="bg-slate-900/60 p-6 text-center border-b border-brand-border">
-        <div className="inline-flex items-center justify-center p-3.5 rounded-full bg-blue-600/10 border border-blue-500/20 text-brand-primary mb-4">
-          <Shield className="w-8 h-8 text-blue-500 animate-pulse" />
+      <div className="bg-slate-900/60 p-6 text-center border-b border-brand-border select-none">
+        <div className="inline-flex items-center justify-center mb-4">
+          <img 
+            src="/logo.jpg" 
+            alt="VISION Logo" 
+            className="w-20 h-20 rounded-xl shadow-2xl border-2 border-brand-border object-contain bg-slate-950 animate-pulse" 
+          />
         </div>
-        <h2 className="font-display font-bold text-2xl tracking-wider uppercase text-brand-text">
+        <h2 className="font-display font-black text-2xl tracking-widest uppercase text-brand-text">
           Vision SOS
         </h2>
-        <p className="text-xs text-gray-400 uppercase tracking-widest mt-1">
-          Police Control Room Login
+        <p className="text-[10px] text-blue-400 font-mono uppercase tracking-widest mt-1">
+          Government Operations Platform
+        </p>
+        <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">
+          Smart City Emergency Command Center
         </p>
       </div>
 

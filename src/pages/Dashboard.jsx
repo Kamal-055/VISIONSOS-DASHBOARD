@@ -356,7 +356,7 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
-                <Compass className="w-10 h-10 text-slate-400 mb-3 animate-spin" style={{ animationDuration: "12s" }} />
+                <img src="/logo.jpg" alt="VISION Logo" className="w-12 h-12 rounded-lg opacity-25 mb-3 object-contain filter grayscale" />
                 <h5 className="font-semibold text-sm text-slate-400">No active SOS signals detected</h5>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs">
                   All channels clear. Authorities will be notified immediately when a mobile SOS trigger occurs.
@@ -518,7 +518,7 @@ const Dashboard = () => {
                 ))
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 text-center text-slate-500 font-mono text-xs">
-                  <UserCheck className="w-8 h-8 text-slate-400 mb-2" />
+                  <img src="/logo.jpg" alt="VISION Logo" className="w-10 h-10 rounded-lg opacity-20 mb-2 object-contain filter grayscale" />
                   <span>No active dispatches</span>
                 </div>
               )}

@@ -23,6 +23,7 @@ import UserManagement from "../pages/UserManagement";
 import Settings from "../pages/Settings";
 import Profile from "../pages/Profile";
 import NotFound from "../pages/NotFound";
+import About from "../pages/About";
 
 const AppRoutes = () => {
   return (
@@ -50,8 +51,9 @@ const AppRoutes = () => {
               <Route path="/streetlights" element={<SmartStreetlights />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/history" element={<SOSHistory />} />
-              <Route path="/profile" element={<Profile />} />
+               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/about" element={<About />} />
               
               {/* Admin-only route */}
               <Route
@@ -69,10 +71,13 @@ const AppRoutes = () => {
             <Route
               path="/unauthorized"
               element={
-                <div className="flex h-screen w-screen flex-col items-center justify-center bg-brand-bg text-brand-text">
-                  <h2 className="text-xl font-bold text-red-500 uppercase tracking-widest mb-2">Access Denied</h2>
-                  <p className="text-sm text-gray-400 mb-4">You do not have administrative privileges to access this channel.</p>
-                  <a href="/" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded uppercase">Return to Control Feed</a>
+                <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-950 text-brand-text bg-grid-cyber relative p-6">
+                  <div className="text-center max-w-md p-8 border border-brand-border bg-brand-card rounded-xl shadow-2xl flex flex-col items-center">
+                    <img src="/logo.jpg" alt="VISION Logo" className="w-16 h-16 rounded-xl border border-brand-border mb-6 object-contain bg-slate-950" />
+                    <h2 className="text-xl font-bold text-red-500 uppercase tracking-widest mb-2">Access Denied</h2>
+                    <p className="text-xs text-gray-400 mb-6 leading-relaxed uppercase tracking-wider font-mono">Administrative clearance levels required for this node.</p>
+                    <a href="/" className="inline-flex items-center gap-2 px-5 py-3 bg-brand-primary hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-lg shadow-blue-500/10 transition-all cursor-pointer">Return to Control Feed</a>
+                  </div>
                 </div>
               }
             />

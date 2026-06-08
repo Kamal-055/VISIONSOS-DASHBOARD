@@ -112,7 +112,16 @@ const SOSHistory = () => {
       `"${(h.resolutionNotes || "").replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const metadataHeader = [
+      "# ===========================================",
+      "# VISION SOS EMERGENCY COMMAND CENTER REPORT",
+      `# Generated: ${new Date().toLocaleString()}`,
+      `# Filtered Cases: ${filteredHistory.length}`,
+      "# ===========================================",
+      "\n"
+    ].join("\n");
+
+    const csvContent = metadataHeader + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -227,9 +236,12 @@ const SOSHistory = () => {
       </div>
 
       {/* Main Print Header (only visible when printing) */}
-      <div className="hidden print:block text-zinc-900 border-b-2 border-zinc-900 pb-4 mb-6">
-        <h1 className="font-bold text-xl uppercase tracking-wider">VISION SOS EMERGENCY AUDIT REPORT</h1>
-        <p className="text-xs font-mono">Date Generated: {new Date().toLocaleString()} // Filtered Cases: {filteredHistory.length}</p>
+      <div className="hidden print:block text-zinc-900 border-b-2 border-zinc-900 pb-4 mb-6 flex items-center gap-4">
+        <img src="/logo.jpg" alt="VISION Logo" className="w-12 h-12 object-contain" />
+        <div>
+          <h1 className="font-bold text-xl uppercase tracking-wider">VISION SOS EMERGENCY AUDIT REPORT</h1>
+          <p className="text-xs font-mono">Date Generated: {new Date().toLocaleString()} // Filtered Cases: {filteredHistory.length}</p>
+        </div>
       </div>
 
       {/* Historical List Table */}
@@ -292,7 +304,7 @@ const SOSHistory = () => {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Database className="w-12 h-12 text-slate-400 mb-4" />
+            <img src="/logo.jpg" alt="VISION Logo" className="w-16 h-16 rounded-xl opacity-20 mb-4 object-contain filter grayscale" />
             <h3 className="font-display font-bold text-sm uppercase text-slate-400 tracking-wider">
               No Archives Registered
             </h3>

@@ -89,7 +89,13 @@ const Navbar = ({ toggleSidebar }) => {
           </button>
           <div className="flex flex-col">
             <h1 className="font-display font-bold text-base tracking-wide text-brand-text flex items-center gap-2">
-              VISION CORE <span className="text-xs px-2 py-0.5 rounded bg-blue-600/10 text-brand-primary border border-blue-500/20 uppercase tracking-widest font-mono">CAD v1.2</span>
+              <img 
+                src="/logo.jpg" 
+                alt="VISION Logo" 
+                className="w-6 h-6 rounded border border-brand-border object-contain bg-slate-950" 
+              />
+              <span>VISION CORE</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-blue-600/10 text-brand-primary border border-blue-500/20 uppercase tracking-widest font-mono hidden xs:inline">CAD v1.2</span>
             </h1>
             <p className="text-[10px] text-gray-400 font-mono tracking-wider hidden sm:block">
               CAD FEED // LATENCY: 22ms // DATABASE CONNECTED

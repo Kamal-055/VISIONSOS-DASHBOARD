@@ -352,8 +352,8 @@ const LiveAlerts = () => {
             </table>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center p-6">
-            <Radio className="w-12 h-12 text-slate-400 mb-4 animate-ping" />
+          <div className="flex flex-col items-center justify-center py-20 text-center p-6 select-none">
+            <img src="/logo.jpg" alt="VISION Logo" className="w-16 h-16 rounded-xl opacity-20 mb-4 object-contain filter grayscale animate-pulse" />
             <h3 className="font-display font-bold text-sm uppercase text-slate-400 tracking-wider">
               CAD Channels Quiet
             </h3>
