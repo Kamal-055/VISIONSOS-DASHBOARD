@@ -252,8 +252,8 @@ export const seedFirestoreData = async () => {
           alertId: "SOS-8947-1",
           userName: "Ananya Iyer",
           phone: "+91 99988 87766",
-          latitude: 28.6145,
-          longitude: 77.2085,
+          latitude: 12.9585,
+          longitude: 77.5530,
           nearestLight: "SL1",
           distance: "45m",
           status: "RESOLVED",
@@ -266,8 +266,8 @@ export const seedFirestoreData = async () => {
           alertId: "SOS-7291-2",
           userName: "Rahul Verma",
           phone: "+91 98888 77766",
-          latitude: 28.6190,
-          longitude: 77.2160,
+          latitude: 12.9592,
+          longitude: 77.5545,
           nearestLight: "SL2",
           distance: "12m",
           status: "SAFE",
@@ -280,8 +280,8 @@ export const seedFirestoreData = async () => {
           alertId: "SOS-4821-3",
           userName: "Neha Gupta",
           phone: "+91 97777 66655",
-          latitude: 28.6110,
-          longitude: 77.2205,
+          latitude: 12.9575,
+          longitude: 77.5520,
           nearestLight: "SL3",
           distance: "80m",
           status: "RESOLVED",
@@ -294,8 +294,8 @@ export const seedFirestoreData = async () => {
           alertId: "SOS-3829-4",
           userName: "Suresh Pillai",
           phone: "+91 96666 55544",
-          latitude: 28.6215,
-          longitude: 77.2015,
+          latitude: 12.9605,
+          longitude: 77.5510,
           nearestLight: "SL4",
           distance: "110m",
           status: "SAFE",
@@ -359,9 +359,9 @@ export const seedFirestoreData = async () => {
     if (stationsSnap.empty) {
       console.log("Seeding police stations...");
       const defaultStations = [
-        { name: "Police HQ Station", lat: 28.6139, lng: 77.2090, details: "Delhi Main Control Hub" },
-        { name: "West Sector Precinct", lat: 28.6210, lng: 77.2010, details: "Sector 3 Patrol Dispatch" },
-        { name: "East Sector Precinct", lat: 28.6100, lng: 77.2220, details: "Sector 7 Patrol Dispatch" }
+        { name: "Police HQ Station", lat: 12.9585, lng: 77.5530, details: "Bangalore HQ Control Hub" },
+        { name: "West Sector Precinct", lat: 12.9610, lng: 77.5450, details: "Sector 3 Patrol Dispatch" },
+        { name: "East Sector Precinct", lat: 12.9550, lng: 77.5610, details: "Sector 7 Patrol Dispatch" }
       ];
       for (const st of defaultStations) {
         await addDoc(stationsCol, st);
@@ -374,9 +374,9 @@ export const seedFirestoreData = async () => {
     if (unitsSnap.empty) {
       console.log("Seeding police patrol units...");
       const defaultUnits = [
-        { name: "Patrol Alpha", officer: "Inspector Rajesh Kumar", lat: 28.6120, lng: 77.2050 },
-        { name: "Patrol Delta", officer: "Officer Priya Sharma", lat: 28.6160, lng: 77.2180 },
-        { name: "Beat Patrol 4", officer: "Officer Amit Patel", lat: 28.6080, lng: 77.2130 }
+        { name: "Patrol Alpha", officer: "Inspector Rajesh Kumar", lat: 12.9582, lng: 77.5500 },
+        { name: "Patrol Delta", officer: "Officer Priya Sharma", lat: 12.9560, lng: 77.5550 },
+        { name: "Beat Patrol 4", officer: "Officer Amit Patel", lat: 12.9600, lng: 77.5520 }
       ];
       for (const un of defaultUnits) {
         await addDoc(unitsCol, un);

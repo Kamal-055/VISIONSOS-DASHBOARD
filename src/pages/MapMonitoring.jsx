@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { subscribeToCurrentAlert, subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToCurrentAlert, subscribeToStreetlights, subscribeToLiveTracking } from "../services/rtdbService";
 import { subscribeToPoliceStations, subscribeToPoliceUnits } from "../services/firestoreService";
 import { Radio, ShieldAlert, Compass } from "lucide-react";
 
@@ -71,12 +71,28 @@ const MapMonitoring = () => {
   const [streetlights, setStreetlights] = useState({});
   const [policeStations, setPoliceStations] = useState([]);
   const [policeUnits, setPoliceUnits] = useState([]);
+  const [liveLocation, setLiveLocation] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubTracking = () => {};
+
     // 1. Subscribe to Live Alerts
     const unsubAlert = subscribeToCurrentAlert((alert) => {
       setCurrentAlert(alert);
+      
+      // Clean up previous tracking if user changes
+      unsubTracking();
+      setLiveLocation(null);
+
+      // If alert is active, subscribe to live tracking of the user
+      if (alert && alert.user) {
+        unsubTracking = subscribeToLiveTracking(alert.user, (loc) => {
+          if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+            setLiveLocation(loc);
+          }
+        });
+      }
     });
 
     // 2. Subscribe to Streetlights
@@ -100,15 +116,23 @@ const MapMonitoring = () => {
       unsubLights();
       unsubStations();
       unsubUnits();
+      unsubTracking();
     };
   }, []);
 
-  // Map center logic (center on alert if exists, otherwise Police HQ)
+  // Active user position (uses live moving GPS coordinate, falls back to static trigger)
+  const sosPosition = React.useMemo(() => {
+    if (!currentAlert) return null;
+    const lat = liveLocation?.latitude !== undefined ? liveLocation.latitude : currentAlert.latitude;
+    const lng = liveLocation?.longitude !== undefined ? liveLocation.longitude : currentAlert.longitude;
+    return [lat, lng];
+  }, [currentAlert, liveLocation]);
+
+  // Map center logic (center on alert if exists, otherwise Bangalore Police HQ)
   const mapCenter = React.useMemo(() => {
-    return currentAlert 
-      ? [currentAlert.latitude, currentAlert.longitude] 
-      : [28.6139, 77.2090];
-  }, [currentAlert?.latitude, currentAlert?.longitude]);
+    if (sosPosition) return sosPosition;
+    return [12.9585, 77.5530]; // Bangalore Control Room Center
+  }, [sosPosition]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -154,25 +178,24 @@ const MapMonitoring = () => {
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          <ChangeMapView center={currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' ? [currentAlert.latitude, currentAlert.longitude] : null} />
+          <ChangeMapView center={sosPosition} />
 
           {/* 1. Render Active SOS Citizen Marker */}
-          {currentAlert && typeof currentAlert.latitude === 'number' && typeof currentAlert.longitude === 'number' && (
+          {sosPosition && (
             <Marker 
-              position={[currentAlert.latitude, currentAlert.longitude]} 
+              position={sosPosition} 
               icon={icons.sos}
             >
               <Popup>
                 <div className="space-y-1.5 p-1 text-xs">
                   <div className="flex items-center gap-1.5 text-brand-danger font-bold uppercase tracking-wider">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
-                    Distress SOS Active
+                    Distress SOS Active {liveLocation ? "• Tracking Live" : ""}
                   </div>
                   <div className="border-t border-slate-700 my-1 pt-1 space-y-1 font-mono">
                     <p><strong>Citizen:</strong> {currentAlert.userName}</p>
                     <p><strong>Contact:</strong> {currentAlert.phone}</p>
-                    <p><strong>Pole Assigner:</strong> {currentAlert.nearestLight || "N/A"}</p>
-                    <p><strong>Pole Distance:</strong> {currentAlert.distance || "0m"}</p>
+                    <p><strong>Coordinates:</strong> {sosPosition[0].toFixed(5)}, {sosPosition[1].toFixed(5)}</p>
                     <p><strong>Time:</strong> {new Date(currentAlert.timestamp).toLocaleTimeString()}</p>
                   </div>
                 </div>

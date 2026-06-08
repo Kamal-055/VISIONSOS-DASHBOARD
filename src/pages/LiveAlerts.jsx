@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, clearCurrentAlertInRTDB } from "../services/rtdbService";
+import { subscribeToCurrentAlert, clearCurrentAlertInRTDB, subscribeToStreetlights } from "../services/rtdbService";
 import { subscribeToOfficers, addSOSHistoryRecord, createIncident } from "../services/firestoreService";
 import { 
   AlertTriangle, 
@@ -23,6 +23,7 @@ const LiveAlerts = () => {
   // States
   const [activeAlert, setActiveAlert] = useState(null);
   const [officers, setOfficers] = useState([]);
+  const [streetlights, setStreetlights] = useState({});
   const [selectedOfficer, setSelectedOfficer] = useState("");
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
@@ -40,11 +41,55 @@ const LiveAlerts = () => {
       setOfficers(data.filter(o => o.status === "Active"));
     });
 
+    // Subscribe to smart streetlights
+    const unsubLights = subscribeToStreetlights((lights) => {
+      setStreetlights(lights);
+    });
+
     return () => {
       unsub();
       unsubOfficers();
+      unsubLights();
     };
   }, []);
+
+  // Calculate nearest pole dynamically for the active alert
+  const nearestPoleInfo = React.useMemo(() => {
+    if (!activeAlert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
+    
+    let nearestId = "SL1";
+    let minDistance = Infinity;
+
+    const lat1 = activeAlert.latitude;
+    const lon1 = activeAlert.longitude;
+
+    Object.keys(streetlights).forEach(key => {
+      const pole = streetlights[key];
+      if (pole && typeof pole.latitude === 'number' && typeof pole.longitude === 'number') {
+        const lat2 = pole.latitude;
+        const lon2 = pole.longitude;
+
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const dist = R * c * 1000; // meters
+
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestId = pole.id || key;
+        }
+      }
+    });
+
+    return {
+      id: nearestId,
+      distance: Math.round(minDistance) + "m"
+    };
+  }, [activeAlert, streetlights]);
 
   const handleAssignOfficerSubmit = async (e) => {
     e.preventDefault();
@@ -63,7 +108,7 @@ const LiveAlerts = () => {
         citizenName: activeAlert.userName,
         phone: activeAlert.phone,
         assignedOfficer: assignedOfficerName,
-        assignedLight: activeAlert.nearestLight || "SL1",
+        assignedLight: activeAlert.nearestLight || nearestPoleInfo.id,
         status: "IN_PROGRESS",
         location: {
           latitude: activeAlert.latitude,
@@ -80,8 +125,8 @@ const LiveAlerts = () => {
         phone: activeAlert.phone,
         latitude: activeAlert.latitude,
         longitude: activeAlert.longitude,
-        nearestLight: activeAlert.nearestLight || "SL1",
-        distance: activeAlert.distance || "0m",
+        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
+        distance: activeAlert.distance || nearestPoleInfo.distance,
         timestamp: activeAlert.timestamp,
         status: "IN_PROGRESS",
         priority: "HIGH",
@@ -90,7 +135,7 @@ const LiveAlerts = () => {
       });
 
       // Clear alert from live feed
-      await clearCurrentAlertInRTDB();
+      await clearCurrentAlertInRTDB(activeAlert.alertId);
       setSirenPlaying(false);
       setShowAssignModal(false);
       setSelectedOfficer("");
@@ -112,8 +157,8 @@ const LiveAlerts = () => {
         phone: activeAlert.phone,
         latitude: activeAlert.latitude,
         longitude: activeAlert.longitude,
-        nearestLight: activeAlert.nearestLight || "SL1",
-        distance: activeAlert.distance || "0m",
+        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
+        distance: activeAlert.distance || nearestPoleInfo.distance,
         timestamp: activeAlert.timestamp,
         status: resolveType,
         priority: "HIGH",
@@ -122,7 +167,7 @@ const LiveAlerts = () => {
       });
 
       // Clear from RTDB
-      await clearCurrentAlertInRTDB();
+      await clearCurrentAlertInRTDB(activeAlert.alertId);
       setSirenPlaying(false);
       setShowResolveModal(false);
       setResolutionNotes("");
@@ -135,7 +180,7 @@ const LiveAlerts = () => {
   const handleDeleteAlert = async () => {
     if (!window.confirm("Are you sure you want to delete this live alert? This action clears the live broadcast without saving history.")) return;
     try {
-      await clearCurrentAlertInRTDB();
+      await clearCurrentAlertInRTDB(activeAlert.alertId);
       setSirenPlaying(false);
       addToast("Live alert deleted from channel.", "info");
     } catch (e) {
@@ -186,10 +231,10 @@ const LiveAlerts = () => {
                     {activeAlert.phone}
                   </td>
                   <td className="p-4 text-brand-warning font-mono">
-                    {activeAlert.nearestLight || "SL1"}
+                    {activeAlert.nearestLight || nearestPoleInfo.id}
                   </td>
                   <td className="p-4 text-green-400 font-mono">
-                    {activeAlert.distance || "25m"}
+                    {activeAlert.distance || nearestPoleInfo.distance}
                   </td>
                   <td className="p-4 text-gray-300 font-mono">
                     {activeAlert.latitude?.toFixed(5)}, {activeAlert.longitude?.toFixed(5)}

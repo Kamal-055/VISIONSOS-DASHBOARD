@@ -70,17 +70,55 @@ const Dashboard = () => {
   const activeIncidents = incidents.filter(i => i.status === "ACTIVE" || i.status === "IN_PROGRESS");
   const totalSOSAlerts = historyCount + activeSOSCount;
 
+  // Calculate nearest pole dynamically for the current active alert
+  const nearestPoleInfo = React.useMemo(() => {
+    if (!currentAlert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
+    
+    let nearestId = "SL1";
+    let minDistance = Infinity;
+
+    const lat1 = currentAlert.latitude;
+    const lon1 = currentAlert.longitude;
+
+    Object.keys(streetlights).forEach(key => {
+      const pole = streetlights[key];
+      if (pole && typeof pole.latitude === 'number' && typeof pole.longitude === 'number') {
+        const lat2 = pole.latitude;
+        const lon2 = pole.longitude;
+
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const dist = R * c * 1000; // meters
+
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestId = pole.id || key;
+        }
+      }
+    });
+
+    return {
+      id: nearestId,
+      distance: Math.round(minDistance) + "m"
+    };
+  }, [currentAlert, streetlights]);
+
   // Trigger Mock SOS alert in Firebase Realtime Database
   const triggerTestSOS = async () => {
     const mockSOSId = "SOS-" + Math.floor(1000 + Math.random() * 9000);
     const mockNames = ["Aisha Sen", "Vikram Malhotra", "Kiran Joshi", "Siddharth Roy", "Riya Mehta"];
     const mockName = mockNames[Math.floor(Math.random() * mockNames.length)];
     
-    // Choose random streetlight near Delhi Police headquarters
+    // Choose random streetlight near Bangalore HQ
     const slChoices = ["SL1", "SL2", "SL3"];
     const selectedSL = slChoices[Math.floor(Math.random() * slChoices.length)];
     
-    // Generate coordinate slightly offset from center
+    // Generate coordinate slightly offset from Bangalore center
     const latOffset = (Math.random() - 0.5) * 0.01;
     const lngOffset = (Math.random() - 0.5) * 0.01;
 
@@ -89,8 +127,8 @@ const Dashboard = () => {
       userName: mockName,
       user: "user_test_" + Math.floor(Math.random() * 100),
       phone: "+91 95555 " + Math.floor(10000 + Math.random() * 90000),
-      latitude: 28.6139 + latOffset,
-      longitude: 77.2090 + lngOffset,
+      latitude: 12.9585 + latOffset,
+      longitude: 77.5530 + lngOffset,
       timestamp: new Date().toISOString(),
       status: "ACTIVE",
       nearestLight: selectedSL,
@@ -261,11 +299,11 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <span className="text-gray-500 block">NEAREST POLE</span>
-                    <span className="text-brand-text font-bold text-brand-warning">{currentAlert.nearestLight || "SL1"}</span>
+                    <span className="text-brand-text font-bold text-brand-warning">{currentAlert.nearestLight || nearestPoleInfo.id}</span>
                   </div>
                   <div>
                     <span className="text-gray-500 block">DISTANCE</span>
-                    <span className="text-brand-text font-bold text-green-400">{currentAlert.distance || "32m"}</span>
+                    <span className="text-brand-text font-bold text-green-400">{currentAlert.distance || nearestPoleInfo.distance}</span>
                   </div>
                   <div>
                     <span className="text-gray-500 block">COORDINATES</span>
