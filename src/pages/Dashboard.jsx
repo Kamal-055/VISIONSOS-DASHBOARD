@@ -24,6 +24,7 @@ const Dashboard = () => {
   // Real-time states
   const [currentAlert, setCurrentAlertState] = useState(null);
   const [rtdbActiveIncidents, setRtdbActiveIncidents] = useState([]);
+  const [rtdbHistory, setRtdbHistory] = useState([]);
   const [streetlights, setStreetlights] = useState({});
   const [incidents, setIncidents] = useState([]);
   const [historyCount, setHistoryCount] = useState(0);
@@ -54,6 +55,7 @@ const Dashboard = () => {
 
     // 4. Listen to SOS history in real-time
     const unsubHistory = subscribeToRTDBSOSHistory((hist) => {
+      setRtdbHistory(hist);
       setHistoryCount(hist.length);
     });
 
@@ -73,9 +75,11 @@ const Dashboard = () => {
   const onlineStreetlights = Object.values(streetlights).filter(s => s.status === "ONLINE").length;
   const offlineStreetlights = totalStreetlights - onlineStreetlights;
 
-  const resolvedCasesCount = incidents.filter(i => i.status === "RESOLVED" || i.status === "SAFE").length + historyCount;
+  const rtdbResolvedCount = rtdbHistory.filter(h => h.status === "RESOLVED" || h.status === "SAFE").length;
+  const resolvedCasesCount = rtdbResolvedCount;
+
   const activeIncidents = incidents.filter(i => i.status === "ACTIVE" || i.status === "IN_PROGRESS");
-  const totalSOSAlerts = historyCount + activeSOSCount;
+  const totalSOSAlerts = rtdbHistory.length;
 
   // Calculate nearest pole dynamically for the current active alert
   const nearestPoleInfo = React.useMemo(() => {
