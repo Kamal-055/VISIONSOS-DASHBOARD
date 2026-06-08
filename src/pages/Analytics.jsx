@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 import { subscribeToIncidents } from "../services/firestoreService";
 import { subscribeToStreetlights, subscribeToRTDBSOSHistory } from "../services/rtdbService";
+import { useTheme } from "../context/ThemeContext";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -286,6 +287,7 @@ class RandomForest {
 // ==========================================
 
 const Analytics = () => {
+  const { resolvedTheme } = useTheme();
   const [incidents, setIncidents] = useState([]);
   const [history, setHistory] = useState([]);
   const [streetlights, setStreetlights] = useState({});
@@ -587,33 +589,40 @@ const Analytics = () => {
     ],
   };
 
+  const chartTextColor = resolvedTheme === "light" ? "#334155" : "#f8fafc";
+  const chartTickColor = resolvedTheme === "light" ? "#64748b" : "#94a3b8";
+  const chartGridColor = resolvedTheme === "light" ? "rgba(15, 23, 42, 0.08)" : "rgba(248, 250, 252, 0.08)";
+  const tooltipBgColor = resolvedTheme === "light" ? "#ffffff" : "#1e293b";
+  const tooltipBorderColor = resolvedTheme === "light" ? "#cbd5e1" : "#334155";
+  const tooltipTextColor = resolvedTheme === "light" ? "#0f172a" : "#f8fafc";
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
         labels: {
-          color: "#f8fafc",
+          color: chartTextColor,
           font: { family: "Inter", size: 10 },
         },
       },
       tooltip: {
-        backgroundColor: "#1e293b",
-        borderColor: "#334155",
+        backgroundColor: tooltipBgColor,
+        borderColor: tooltipBorderColor,
         borderWidth: 1,
-        titleColor: "#f8fafc",
-        bodyColor: "#f8fafc",
+        titleColor: tooltipTextColor,
+        bodyColor: tooltipTextColor,
         padding: 10,
       },
     },
     scales: {
       x: {
-        grid: { color: "rgba(51, 65, 85, 0.15)" },
-        ticks: { color: "#94a3b8", font: { size: 9 } },
+        grid: { color: chartGridColor },
+        ticks: { color: chartTickColor, font: { size: 9 } },
       },
       y: {
-        grid: { color: "rgba(51, 65, 85, 0.15)" },
-        ticks: { color: "#94a3b8", font: { size: 9 } },
+        grid: { color: chartGridColor },
+        ticks: { color: chartTickColor, font: { size: 9 } },
       },
     },
   };

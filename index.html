@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="bg-[#0F172A]">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>" />
@@ -13,8 +13,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <!-- Anti-Flash Blocking Script -->
+    <script>
+      (function() {
+        try {
+          const theme = localStorage.getItem('settings_theme') || 'system';
+          const root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          if (theme === 'dark') {
+            root.classList.add('dark');
+          } else if (theme === 'light') {
+            root.classList.add('light');
+          } else {
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            root.classList.add(systemPrefersDark ? 'dark' : 'light');
+          }
+        } catch (e) {
+          console.error("Theme flash prevention script error:", e);
+        }
+      })();
+    </script>
   </head>
-  <body class="bg-[#0F172A] text-[#F8FAFC] min-h-screen overflow-hidden antialiased">
+  <body class="min-h-screen overflow-hidden antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
