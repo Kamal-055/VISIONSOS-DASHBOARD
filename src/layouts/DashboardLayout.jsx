@@ -3,7 +3,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Common/Sidebar";
 import Navbar from "../components/Common/Navbar";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToActiveIncidents, startSOSBridgeListener, subscribeToStreetlights } from "../services/rtdbService";
 
 const DashboardLayout = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -15,22 +15,26 @@ const DashboardLayout = () => {
   const prevStreetlightsRef = useRef({});
 
   useEffect(() => {
-    // 1. Subscribe to Live SOS Alerts from RTDB
-    const unsubscribeAlerts = subscribeToCurrentAlert((alert) => {
-      if (alert) {
-        // Active alert exists
-        setActiveSOSAlerts([alert]);
+    // Start background sync bridge for external/mobile SOS writes
+    const unsubscribeBridge = startSOSBridgeListener();
+
+    // 1. Subscribe to Live SOS Alerts from RTDB active_incidents
+    const unsubscribeAlerts = subscribeToActiveIncidents((alerts) => {
+      if (alerts && alerts.length > 0) {
+        // Active alerts exist
+        setActiveSOSAlerts(alerts);
         
-        // Check if this is a newly received alert
-        if (alert.alertId !== prevAlertIdRef.current) {
-          prevAlertIdRef.current = alert.alertId;
+        // Check if the latest alert is a newly received alert
+        const latestAlert = alerts[0];
+        if (latestAlert.incidentId !== prevAlertIdRef.current) {
+          prevAlertIdRef.current = latestAlert.incidentId;
           
           // Trigger notifications
-          addToast(`CRITICAL: Live SOS Alert [${alert.alertId}] from ${alert.userName}!`, "danger");
+          addToast(`CRITICAL: Live SOS Alert [${latestAlert.incidentId}] from ${latestAlert.userName}!`, "danger");
           setSirenPlaying(true);
         }
       } else {
-        // No active alert
+        // No active alerts
         setActiveSOSAlerts([]);
         setSirenPlaying(false);
         prevAlertIdRef.current = null;
@@ -53,6 +57,7 @@ const DashboardLayout = () => {
     });
 
     return () => {
+      unsubscribeBridge();
       unsubscribeAlerts();
       unsubscribeStreetlights();
     };

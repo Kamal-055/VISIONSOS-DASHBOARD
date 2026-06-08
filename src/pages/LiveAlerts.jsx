@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, clearCurrentAlertInRTDB, subscribeToStreetlights } from "../services/rtdbService";
+import { subscribeToActiveIncidents, clearCurrentAlertInRTDB, subscribeToStreetlights } from "../services/rtdbService";
 import { subscribeToOfficers, addSOSHistoryRecord, createIncident } from "../services/firestoreService";
 import { 
   AlertTriangle, 
@@ -21,7 +21,8 @@ const LiveAlerts = () => {
   const navigate = useNavigate();
   
   // States
-  const [activeAlert, setActiveAlert] = useState(null);
+  const [activeAlerts, setActiveAlerts] = useState([]);
+  const [selectedTargetAlert, setSelectedTargetAlert] = useState(null);
   const [officers, setOfficers] = useState([]);
   const [streetlights, setStreetlights] = useState({});
   const [selectedOfficer, setSelectedOfficer] = useState("");
@@ -31,9 +32,9 @@ const LiveAlerts = () => {
   const [resolveType, setResolveType] = useState("RESOLVED"); // RESOLVED or SAFE
 
   useEffect(() => {
-    // Subscribe to live alert
-    const unsub = subscribeToCurrentAlert((alert) => {
-      setActiveAlert(alert);
+    // Subscribe to live concurrent active alerts
+    const unsub = subscribeToActiveIncidents((alerts) => {
+      setActiveAlerts(alerts);
     });
 
     // Subscribe to officers list from Firestore in real-time
@@ -53,15 +54,15 @@ const LiveAlerts = () => {
     };
   }, []);
 
-  // Calculate nearest pole dynamically for the active alert
-  const nearestPoleInfo = React.useMemo(() => {
-    if (!activeAlert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
+  // Calculate nearest pole dynamically for a specific alert
+  const getNearestPole = (alert) => {
+    if (!alert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
     
     let nearestId = "SL1";
     let minDistance = Infinity;
 
-    const lat1 = activeAlert.latitude;
-    const lon1 = activeAlert.longitude;
+    const lat1 = alert.latitude;
+    const lon1 = alert.longitude;
 
     Object.keys(streetlights).forEach(key => {
       const pole = streetlights[key];
@@ -89,30 +90,32 @@ const LiveAlerts = () => {
       id: nearestId,
       distance: Math.round(minDistance) + "m"
     };
-  }, [activeAlert, streetlights]);
+  };
 
   const handleAssignOfficerSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedOfficer || !activeAlert) {
+    if (!selectedOfficer || !selectedTargetAlert) {
       addToast("Please select an officer.", "warning");
       return;
     }
 
     const assignedOfficerName = officers.find(o => o.officerId === selectedOfficer)?.name || "Officer";
+    const targetNearest = selectedTargetAlert.nearestLight || getNearestPole(selectedTargetAlert).id;
+    const targetDistance = selectedTargetAlert.distance || getNearestPole(selectedTargetAlert).distance;
 
     try {
       // Create active case in incident_history
       const newCaseId = "CASE-" + Math.floor(1000 + Math.random() * 9000);
       const incidentData = {
         caseId: newCaseId,
-        citizenName: activeAlert.userName,
-        phone: activeAlert.phone,
+        citizenName: selectedTargetAlert.userName,
+        phone: selectedTargetAlert.phone,
         assignedOfficer: assignedOfficerName,
-        assignedLight: activeAlert.nearestLight || nearestPoleInfo.id,
+        assignedLight: targetNearest,
         status: "IN_PROGRESS",
         location: {
-          latitude: activeAlert.latitude,
-          longitude: activeAlert.longitude
+          latitude: selectedTargetAlert.latitude,
+          longitude: selectedTargetAlert.longitude
         }
       };
       
@@ -120,31 +123,35 @@ const LiveAlerts = () => {
 
       // Save alert snapshot to SOS history with IN_PROGRESS marker
       await addSOSHistoryRecord({
-        alertId: activeAlert.alertId,
-        userName: activeAlert.userName,
-        phone: activeAlert.phone,
-        latitude: activeAlert.latitude,
-        longitude: activeAlert.longitude,
-        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
-        distance: activeAlert.distance || nearestPoleInfo.distance,
-        timestamp: activeAlert.timestamp,
+        alertId: selectedTargetAlert.alertId || selectedTargetAlert.id,
+        userName: selectedTargetAlert.userName,
+        phone: selectedTargetAlert.phone,
+        latitude: selectedTargetAlert.latitude,
+        longitude: selectedTargetAlert.longitude,
+        nearestLight: targetNearest,
+        distance: targetDistance,
+        timestamp: selectedTargetAlert.timestamp,
         status: "IN_PROGRESS",
-        priority: "HIGH",
+        priority: selectedTargetAlert.priority || "HIGH",
         resolvedBy: assignedOfficerName,
         resolutionNotes: `Assigned case to officer: ${assignedOfficerName}. Dispatch ID: ${newCaseId}`
       });
 
       // Clear alert from live feed
-      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+      await clearCurrentAlertInRTDB(selectedTargetAlert.alertId || selectedTargetAlert.id, {
         status: "IN_PROGRESS",
         resolvedBy: assignedOfficerName,
         resolutionNotes: `Assigned case to officer: ${assignedOfficerName}. Dispatch ID: ${newCaseId}`,
-        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
-        distance: activeAlert.distance || nearestPoleInfo.distance
+        nearestLight: targetNearest,
+        distance: targetDistance
       });
-      setSirenPlaying(false);
+
+      if (activeAlerts.length <= 1) {
+        setSirenPlaying(false);
+      }
       setShowAssignModal(false);
       setSelectedOfficer("");
+      setSelectedTargetAlert(null);
       addToast(`Dispatch created: ${newCaseId}. ${assignedOfficerName} deployed.`, "success");
     } catch (err) {
       addToast("Failed to assign officer: " + err.message, "danger");
@@ -153,51 +160,60 @@ const LiveAlerts = () => {
 
   const handleResolveSubmit = async (e) => {
     e.preventDefault();
-    if (!activeAlert) return;
+    if (!selectedTargetAlert) return;
+
+    const targetNearest = selectedTargetAlert.nearestLight || getNearestPole(selectedTargetAlert).id;
+    const targetDistance = selectedTargetAlert.distance || getNearestPole(selectedTargetAlert).distance;
 
     try {
       // Archive to history
       await addSOSHistoryRecord({
-        alertId: activeAlert.alertId,
-        userName: activeAlert.userName,
-        phone: activeAlert.phone,
-        latitude: activeAlert.latitude,
-        longitude: activeAlert.longitude,
-        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
-        distance: activeAlert.distance || nearestPoleInfo.distance,
-        timestamp: activeAlert.timestamp,
+        alertId: selectedTargetAlert.alertId || selectedTargetAlert.id,
+        userName: selectedTargetAlert.userName,
+        phone: selectedTargetAlert.phone,
+        latitude: selectedTargetAlert.latitude,
+        longitude: selectedTargetAlert.longitude,
+        nearestLight: targetNearest,
+        distance: targetDistance,
+        timestamp: selectedTargetAlert.timestamp,
         status: resolveType,
-        priority: "HIGH",
+        priority: selectedTargetAlert.priority || "HIGH",
         resolvedBy: "HQ Command Center",
         resolutionNotes: resolutionNotes || `Alert marked as ${resolveType} by dispatcher.`
       });
 
       // Clear from RTDB with full details
-      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+      await clearCurrentAlertInRTDB(selectedTargetAlert.alertId || selectedTargetAlert.id, {
         status: resolveType,
         resolvedBy: "HQ Command Center",
         resolutionNotes: resolutionNotes || `Alert marked as ${resolveType} by dispatcher.`,
-        nearestLight: activeAlert.nearestLight || nearestPoleInfo.id,
-        distance: activeAlert.distance || nearestPoleInfo.distance
+        nearestLight: targetNearest,
+        distance: targetDistance
       });
-      setSirenPlaying(false);
+
+      if (activeAlerts.length <= 1) {
+        setSirenPlaying(false);
+      }
       setShowResolveModal(false);
       setResolutionNotes("");
-      addToast(`Alert ${activeAlert.alertId} resolved as ${resolveType} and archived.`, "success");
+      setSelectedTargetAlert(null);
+      addToast(`Alert ${selectedTargetAlert.alertId || selectedTargetAlert.id} resolved as ${resolveType} and archived.`, "success");
     } catch (err) {
       addToast("Resolution failed: " + err.message, "danger");
     }
   };
 
-  const handleDeleteAlert = async () => {
-    if (!window.confirm("Are you sure you want to delete this live alert? This action clears the live broadcast without saving history.")) return;
+  const handleDeleteAlert = async (alert) => {
+    if (!window.confirm(`Are you sure you want to delete live alert ${alert.alertId || alert.id}? This action clears the live broadcast without saving history.`)) return;
     try {
-      await clearCurrentAlertInRTDB(activeAlert.alertId, {
+      await clearCurrentAlertInRTDB(alert.alertId || alert.id, {
         status: "RESOLVED",
         resolvedBy: "HQ Command Center",
         resolutionNotes: "Live active alert signal discarded."
       });
-      setSirenPlaying(false);
+      if (activeAlerts.length <= 1) {
+        setSirenPlaying(false);
+      }
       addToast("Live alert deleted from channel.", "info");
     } catch (e) {
       addToast("Failed to delete alert.", "danger");
@@ -219,100 +235,119 @@ const LiveAlerts = () => {
 
       {/* Main Alerts Listing */}
       <div className="bg-brand-card border border-brand-border rounded-xl shadow-lg overflow-hidden">
-        {activeAlert ? (
+        {activeAlerts && activeAlerts.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-900 border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                  <th className="p-4">Alert ID</th>
+                  <th className="p-4">Alert / Incident ID</th>
+                  <th className="p-4">Device ID</th>
                   <th className="p-4">Citizen</th>
                   <th className="p-4">Contact</th>
                   <th className="p-4">Nearest Light</th>
                   <th className="p-4">Distance</th>
                   <th className="p-4">Incident Coordinates</th>
                   <th className="p-4">Time Triggered</th>
-                  <th className="p-4">Priority</th>
+                  <th className="p-4">Status</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-border text-xs">
-                <tr className="hover:bg-slate-900/40 transition-colors animate-pulse duration-1000">
-                  <td className="p-4 font-mono font-bold text-brand-danger">
-                    {activeAlert.alertId}
-                  </td>
-                  <td className="p-4 font-semibold text-brand-text">
-                    {activeAlert.userName}
-                  </td>
-                  <td className="p-4 text-gray-300">
-                    {activeAlert.phone}
-                  </td>
-                  <td className="p-4 text-brand-warning font-mono">
-                    {activeAlert.nearestLight || nearestPoleInfo.id}
-                  </td>
-                  <td className="p-4 text-green-400 font-mono">
-                    {activeAlert.distance || nearestPoleInfo.distance}
-                  </td>
-                  <td className="p-4 text-gray-300 font-mono">
-                    {activeAlert.latitude?.toFixed(5)}, {activeAlert.longitude?.toFixed(5)}
-                  </td>
-                  <td className="p-4 text-gray-400">
-                    {new Date(activeAlert.timestamp).toLocaleTimeString()}
-                  </td>
-                  <td className="p-4">
-                    <span className="px-2 py-0.5 rounded bg-red-950 text-brand-danger border border-red-500/30 font-bold uppercase tracking-widest text-[9px]">
-                      HIGH
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => navigate("/map")}
-                        className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                        title="Locate Alert on Leaflet Map"
-                      >
-                        <Compass size={14} />
-                      </button>
-                      
-                      <button
-                        onClick={() => setShowAssignModal(true)}
-                        className="p-2 bg-brand-primary hover:bg-blue-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                        title="Deploy Patrol Officer"
-                      >
-                        <UserCheck size={14} />
-                      </button>
+                {activeAlerts.map((alert) => {
+                  const nearestLightId = alert.assignedStreetlight || alert.nearestLight || getNearestPole(alert).id;
+                  const distVal = alert.distance || getNearestPole(alert).distance;
+                  return (
+                    <tr key={alert.alertId || alert.id} className="hover:bg-slate-900/40 transition-colors duration-1000">
+                      <td className="p-4 font-mono font-bold text-brand-danger">
+                        {alert.alertId || alert.id}
+                      </td>
+                      <td className="p-4 font-mono text-gray-400">
+                        {alert.deviceId || "DEV-N/A"}
+                      </td>
+                      <td className="p-4 font-semibold text-brand-text">
+                        {alert.userName}
+                      </td>
+                      <td className="p-4 text-gray-300">
+                        {alert.phone}
+                      </td>
+                      <td className="p-4 text-brand-warning font-mono">
+                        {nearestLightId}
+                      </td>
+                      <td className="p-4 text-green-400 font-mono">
+                        {distVal}
+                      </td>
+                      <td className="p-4 text-gray-300 font-mono">
+                        {alert.latitude?.toFixed(5)}, {alert.longitude?.toFixed(5)}
+                      </td>
+                      <td className="p-4 text-gray-400">
+                        {new Date(alert.timestamp).toLocaleTimeString()}
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
+                          alert.status === "ACTIVE"
+                            ? "bg-red-950 text-brand-danger border border-red-500/30 animate-pulse"
+                            : "bg-amber-950 text-brand-warning border border-amber-500/30"
+                        }`}>
+                          {alert.status || "ACTIVE"}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => navigate("/map")}
+                            className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Locate Alert on Leaflet Map"
+                          >
+                            <Compass size={14} />
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              setSelectedTargetAlert(alert);
+                              setShowAssignModal(true);
+                            }}
+                            className="p-2 bg-brand-primary hover:bg-blue-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Deploy Patrol Officer"
+                          >
+                            <UserCheck size={14} />
+                          </button>
 
-                      <button
-                        onClick={() => {
-                          setResolveType("RESOLVED");
-                          setShowResolveModal(true);
-                        }}
-                        className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                        title="Mark Case Resolved"
-                      >
-                        <CheckCircle size={14} />
-                      </button>
+                          <button
+                            onClick={() => {
+                              setSelectedTargetAlert(alert);
+                              setResolveType("RESOLVED");
+                              setShowResolveModal(true);
+                            }}
+                            className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Mark Case Resolved"
+                          >
+                            <CheckCircle size={14} />
+                          </button>
 
-                      <button
-                        onClick={() => {
-                          setResolveType("SAFE");
-                          setShowResolveModal(true);
-                        }}
-                        className="p-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                        title="Verify Citizen Safe"
-                      >
-                        <ShieldAlert size={14} />
-                      </button>
+                          <button
+                            onClick={() => {
+                              setSelectedTargetAlert(alert);
+                              setResolveType("SAFE");
+                              setShowResolveModal(true);
+                            }}
+                            className="p-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Verify Citizen Safe"
+                          >
+                            <ShieldAlert size={14} />
+                          </button>
 
-                      <button
-                        onClick={handleDeleteAlert}
-                        className="p-2 bg-red-950/40 text-red-400 hover:bg-red-900 border border-red-500/20 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                        title="Discard Signal"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                          <button
+                            onClick={() => handleDeleteAlert(alert)}
+                            className="p-2 bg-red-950/40 text-red-400 hover:bg-red-900 border border-red-500/20 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Discard Signal"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -330,7 +365,7 @@ const LiveAlerts = () => {
       </div>
 
       {/* Deploy Patrol Officer Modal */}
-      {showAssignModal && activeAlert && (
+      {showAssignModal && selectedTargetAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-brand-border flex items-center gap-3">
@@ -343,7 +378,7 @@ const LiveAlerts = () => {
               <div>
                 <span className="text-gray-500 block text-[10px] uppercase font-mono mb-1">TARGET INCIDENT</span>
                 <p className="text-xs text-brand-text font-bold">
-                  {activeAlert.alertId} // User: {activeAlert.userName}
+                  {selectedTargetAlert.alertId || selectedTargetAlert.id} // User: {selectedTargetAlert.userName}
                 </p>
               </div>
 
@@ -369,7 +404,10 @@ const LiveAlerts = () => {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAssignModal(false)}
+                  onClick={() => {
+                    setShowAssignModal(false);
+                    setSelectedTargetAlert(null);
+                  }}
                   className="px-4 py-2 border border-slate-700 hover:bg-slate-800 text-xs font-semibold uppercase rounded-lg text-gray-400 cursor-pointer"
                 >
                   Cancel
@@ -387,7 +425,7 @@ const LiveAlerts = () => {
       )}
 
       {/* Resolve SOS Modal */}
-      {showResolveModal && activeAlert && (
+      {showResolveModal && selectedTargetAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-brand-border flex items-center gap-3">
@@ -400,7 +438,7 @@ const LiveAlerts = () => {
               <div>
                 <span className="text-gray-500 block text-[10px] uppercase font-mono mb-1">TARGET INCIDENT</span>
                 <p className="text-xs text-brand-text font-bold">
-                  {activeAlert.alertId} // User: {activeAlert.userName}
+                  {selectedTargetAlert.alertId || selectedTargetAlert.id} // User: {selectedTargetAlert.userName}
                 </p>
               </div>
 
@@ -420,7 +458,10 @@ const LiveAlerts = () => {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowResolveModal(false)}
+                  onClick={() => {
+                    setShowResolveModal(false);
+                    setSelectedTargetAlert(null);
+                  }}
                   className="px-4 py-2 border border-slate-700 hover:bg-slate-800 text-xs font-semibold uppercase rounded-lg text-gray-400 cursor-pointer"
                 >
                   Cancel

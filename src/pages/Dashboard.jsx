@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNotifications } from "../context/NotificationContext";
-import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB, subscribeToRTDBSOSHistory, seedDefaultStreetlights } from "../services/rtdbService";
+import { subscribeToCurrentAlert, subscribeToStreetlights, setCurrentAlert, clearCurrentAlertInRTDB, subscribeToRTDBSOSHistory, seedDefaultStreetlights, subscribeToActiveIncidents } from "../services/rtdbService";
 import { subscribeToIncidents, seedFirestoreData } from "../services/firestoreService";
 import { 
   ShieldAlert, 
@@ -23,6 +23,7 @@ const Dashboard = () => {
   
   // Real-time states
   const [currentAlert, setCurrentAlertState] = useState(null);
+  const [rtdbActiveIncidents, setRtdbActiveIncidents] = useState([]);
   const [streetlights, setStreetlights] = useState({});
   const [incidents, setIncidents] = useState([]);
   const [historyCount, setHistoryCount] = useState(0);
@@ -35,12 +36,17 @@ const Dashboard = () => {
       setCurrentAlertState(alert);
     });
 
+    // 1.1 Listen to concurrent active RTDB incidents
+    const unsubRTDBIncidents = subscribeToActiveIncidents((list) => {
+      setRtdbActiveIncidents(list);
+    });
+
     // 2. Listen to streetlights
     const unsubStreetlights = subscribeToStreetlights((lights) => {
       setStreetlights(lights);
     });
 
-    // 3. Listen to incidents in real-time
+    // 3. Listen to incidents in real-time (Firestore dispatches)
     const unsubIncidents = subscribeToIncidents((incs) => {
       setIncidents(incs);
       setLoading(false);
@@ -53,14 +59,15 @@ const Dashboard = () => {
 
     return () => {
       unsubAlert();
+      unsubRTDBIncidents();
       unsubStreetlights();
       unsubIncidents();
       unsubHistory();
     };
   }, []);
 
-  // Recalculate stats
-  const activeSOSCount = currentAlert ? 1 : 0;
+  // Recalculate stats - activeSOSCount now counts all concurrent active incidents in RTDB
+  const activeSOSCount = rtdbActiveIncidents.length;
   
   const totalStreetlights = Object.keys(streetlights).length;
   const onlineStreetlights = Object.values(streetlights).filter(s => s.status === "ONLINE").length;
@@ -122,10 +129,15 @@ const Dashboard = () => {
     const latOffset = (Math.random() - 0.5) * 0.01;
     const lngOffset = (Math.random() - 0.5) * 0.01;
 
+    const deviceId = "DEV-" + Math.floor(100000 + Math.random() * 900000);
+
     const testAlert = {
       alertId: mockSOSId,
       userName: mockName,
       user: "user_test_" + Math.floor(Math.random() * 100),
+      uid: "user_test_" + Math.floor(Math.random() * 100),
+      deviceId,
+      email: `${mockName.toLowerCase().replace(/\s+/g, '')}@vision.gov`,
       phone: "+91 95555 " + Math.floor(10000 + Math.random() * 90000),
       latitude: 12.9585 + latOffset,
       longitude: 77.5530 + lngOffset,
@@ -345,6 +357,69 @@ const Dashboard = () => {
                 <p className="text-xs text-slate-500 mt-1 max-w-xs">
                   All channels clear. Authorities will be notified immediately when a mobile SOS trigger occurs.
                 </p>
+              </div>
+            )}
+          </div>
+
+          {/* Active Incidents Feed (RTDB) */}
+          <div className="bg-brand-card border border-brand-border rounded-xl shadow-lg p-6">
+            <h4 className="font-display font-bold text-sm uppercase tracking-wider text-brand-text border-b border-brand-border pb-3 mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <ShieldAlert size={16} className="text-brand-danger animate-pulse" />
+                Active Emergency Incidents Feed
+              </span>
+              <span className="px-2.5 py-0.5 rounded bg-red-500/10 text-brand-danger border border-red-500/20 text-[10px] font-mono">
+                {rtdbActiveIncidents.length} ACTIVE
+              </span>
+            </h4>
+
+            {rtdbActiveIncidents.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-900 border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      <th className="p-3">Incident ID</th>
+                      <th className="p-3">User Name</th>
+                      <th className="p-3">Phone</th>
+                      <th className="p-3">Location (Lat, Lng)</th>
+                      <th className="p-3">Time</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Officer</th>
+                      <th className="p-3">Streetlight</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border text-xs font-mono">
+                    {rtdbActiveIncidents.map((inc) => (
+                      <tr key={inc.incidentId} className="hover:bg-slate-900/40 transition-colors">
+                        <td className="p-3 font-bold text-brand-danger">{inc.incidentId}</td>
+                        <td className="p-3 font-sans text-brand-text font-semibold">{inc.userName}</td>
+                        <td className="p-3 text-gray-300">{inc.phone}</td>
+                        <td className="p-3 text-gray-400">
+                          {inc.latitude?.toFixed(4)}, {inc.longitude?.toFixed(4)}
+                        </td>
+                        <td className="p-3 text-gray-400">
+                          {new Date(inc.timestamp).toLocaleTimeString()}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            inc.status === "ACTIVE" 
+                              ? "bg-red-950/40 text-brand-danger border border-red-500/30 animate-pulse" 
+                              : "bg-amber-950/40 text-brand-warning border border-amber-500/30"
+                          }`}>
+                            {inc.status}
+                          </span>
+                        </td>
+                        <td className="p-3 font-sans text-gray-300">{inc.assignedOfficer || "UNASSIGNED"}</td>
+                        <td className="p-3 text-brand-warning">{inc.assignedStreetlight || inc.nearestLight || "SL1"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 text-center bg-slate-900/40 border border-dashed border-slate-800 rounded-xl text-slate-500 font-mono text-xs">
+                <CheckCircle className="w-8 h-8 text-emerald-500/50 mb-2" />
+                <span>No concurrent active incidents in RTDB</span>
               </div>
             )}
           </div>

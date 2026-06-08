@@ -112,23 +112,42 @@ export const updateCurrentCaseInRTDB = async (caseData) => {
   }
 };
 
-// 6. Write active SOS alert to RTDB sos_history
+// 6. Write active SOS alert to RTDB sos_history, active_incidents, and current_alert
 export const setCurrentAlert = async (alertData) => {
   try {
     const alertId = alertData.alertId || `alert_${Date.now()}`;
-    const alertRef = ref(dbRealtime, `sos_history/${alertId}`);
-    await set(alertRef, {
+    const deviceId = alertData.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const uid = alertData.uid || alertData.user || `user_${Math.floor(1000 + Math.random() * 9000)}`;
+    const email = alertData.email || `${(alertData.userName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`;
+
+    const enrichedAlertData = {
       ...alertData,
       alertId,
+      deviceId,
+      uid,
+      email,
       status: "ACTIVE"
-    });
+    };
+
+    // A. Write to sos_history (for archive/historical records)
+    const alertRef = ref(dbRealtime, `sos_history/${alertId}`);
+    await set(alertRef, enrichedAlertData);
+
+    // B. Write to active_incidents (for concurrent active tracking)
+    const incidentRef = ref(dbRealtime, `active_incidents/${alertId}`);
+    await set(incidentRef, enrichedAlertData);
+
+    // C. Write to sos_alert/current_alert (for backward compatibility)
+    const currentAlertRef = ref(dbRealtime, "sos_alert/current_alert");
+    await set(currentAlertRef, enrichedAlertData);
+
   } catch (error) {
     console.error("Error setting alert in RTDB:", error);
     throw error;
   }
 };
 
-// 7. Clear/resolve current active SOS alert in RTDB
+// 7. Clear/resolve current active SOS alert in RTDB (across all locations)
 export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
   try {
     const historyRef = ref(dbRealtime, "sos_history");
@@ -151,19 +170,175 @@ export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
     }
 
     if (targetKey) {
-      const alertRef = ref(dbRealtime, `sos_history/${targetKey}`);
-      await update(alertRef, { 
+      const updateData = { 
         status: updates.status || "RESOLVED", 
         resolvedAt: new Date().toISOString(),
         resolvedBy: updates.resolvedBy || "HQ Command Center",
         resolutionNotes: updates.resolutionNotes || "Alert cleared by dispatcher.",
         ...updates
-      });
+      };
+
+      // A. Update in sos_history
+      const alertRef = ref(dbRealtime, `sos_history/${targetKey}`);
+      await update(alertRef, updateData);
+
+      // B. Update/resolve in active_incidents
+      const incidentRef = ref(dbRealtime, `active_incidents/${targetKey}`);
+      const incidentSnap = await get(incidentRef);
+      if (incidentSnap.exists()) {
+        await update(incidentRef, updateData);
+      }
+
+      // C. Update sos_alert/current_alert (backward compatibility)
+      const currentAlertRef = ref(dbRealtime, "sos_alert/current_alert");
+      const currentAlertSnap = await get(currentAlertRef);
+      if (currentAlertSnap.exists()) {
+        const curAlert = currentAlertSnap.val();
+        if (curAlert && (curAlert.alertId === targetKey || curAlert.id === targetKey)) {
+          // It's the current alert! Let's check if there are other active incidents to show.
+          const activeIncRef = ref(dbRealtime, "active_incidents");
+          const activeIncSnap = await get(activeIncRef);
+          let nextActive = null;
+          if (activeIncSnap.exists()) {
+            const incidents = activeIncSnap.val();
+            const activeList = [];
+            Object.keys(incidents).forEach(k => {
+              if (k !== targetKey && incidents[k] && (incidents[k].status === "ACTIVE" || incidents[k].status === "IN_PROGRESS")) {
+                activeList.push({ id: k, ...incidents[k] });
+              }
+            });
+            if (activeList.length > 0) {
+              activeList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+              nextActive = activeList[0];
+            }
+          }
+
+          if (nextActive) {
+            // Replace with next active alert
+            await set(currentAlertRef, {
+              ...nextActive,
+              alertId: nextActive.id
+            });
+          } else {
+            // No other active alerts, just resolve current_alert
+            await update(currentAlertRef, updateData);
+          }
+        }
+      }
     }
   } catch (error) {
     console.error("Error clearing current alert in RTDB:", error);
     throw error;
   }
+};
+
+// 7.1 Subscribe to active incidents (concurrent active list)
+export const subscribeToActiveIncidents = (onIncidentsUpdated) => {
+  const incidentsRef = ref(dbRealtime, "active_incidents");
+  const unsubscribe = onValue(incidentsRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    const list = [];
+    Object.keys(data).forEach(key => {
+      const item = data[key];
+      if (item && (item.status === "ACTIVE" || item.status === "IN_PROGRESS")) {
+        list.push({
+          incidentId: key,
+          id: key,
+          ...item
+        });
+      }
+    });
+    // Sort latest first
+    list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    onIncidentsUpdated(list);
+  });
+  return unsubscribe;
+};
+
+// 7.2 Background bridge to synchronize external writes (e.g. mobile app) with active_incidents
+export const startSOSBridgeListener = () => {
+  // Listen to sos_history for any active alerts
+  const historyRef = ref(dbRealtime, "sos_history");
+  const unsubscribeHistory = onValue(historyRef, async (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+    
+    // Check active_incidents node
+    const activeIncidentsRef = ref(dbRealtime, "active_incidents");
+    const activeIncidentsSnap = await get(activeIncidentsRef);
+    const activeIncidentsData = activeIncidentsSnap.val() || {};
+
+    Object.keys(data).forEach(async (key) => {
+      const alert = data[key];
+      if (alert && alert.status === "ACTIVE" && !activeIncidentsData[key]) {
+        // Active in history but missing in active_incidents - copy it!
+        console.log(`Bridge Sync: Copying active alert ${key} to active_incidents`);
+        const deviceId = alert.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`;
+        const uid = alert.uid || alert.user || `user_${Math.floor(1000 + Math.random() * 9000)}`;
+        const email = alert.email || `${(alert.userName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`;
+        
+        await set(ref(dbRealtime, `active_incidents/${key}`), {
+          uid,
+          deviceId,
+          userName: alert.userName || "Unknown User",
+          email,
+          phone: alert.phone || "N/A",
+          latitude: alert.latitude || 12.9585,
+          longitude: alert.longitude || 77.5530,
+          timestamp: alert.timestamp || new Date().toISOString(),
+          status: "ACTIVE",
+          assignedOfficer: alert.assignedOfficer || "UNASSIGNED",
+          assignedStreetlight: alert.nearestLight || alert.assignedStreetlight || "SL1",
+          distance: alert.distance || "30m",
+          priority: alert.priority || "HIGH"
+        });
+      }
+    });
+  });
+
+  // Listen to sos_alert/current_alert
+  const currentAlertRef = ref(dbRealtime, "sos_alert/current_alert");
+  const unsubscribeCurrent = onValue(currentAlertRef, async (snapshot) => {
+    const alert = snapshot.val();
+    if (!alert || alert.status !== "ACTIVE") return;
+
+    const alertId = alert.alertId || alert.id;
+    if (!alertId) return;
+
+    // Check active_incidents node
+    const activeIncidentsRef = ref(dbRealtime, "active_incidents");
+    const activeIncidentsSnap = await get(activeIncidentsRef);
+    const activeIncidentsData = activeIncidentsSnap.val() || {};
+
+    if (!activeIncidentsData[alertId]) {
+      // Missing in active_incidents - copy it!
+      console.log(`Bridge Sync: Copying current_alert ${alertId} to active_incidents`);
+      const deviceId = alert.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`;
+      const uid = alert.uid || alert.user || `user_${Math.floor(1000 + Math.random() * 9000)}`;
+      const email = alert.email || `${(alert.userName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`;
+
+      await set(ref(dbRealtime, `active_incidents/${alertId}`), {
+        uid,
+        deviceId,
+        userName: alert.userName || "Unknown User",
+        email,
+        phone: alert.phone || "N/A",
+        latitude: alert.latitude || 12.9585,
+        longitude: alert.longitude || 77.5530,
+        timestamp: alert.timestamp || new Date().toISOString(),
+        status: "ACTIVE",
+        assignedOfficer: alert.assignedOfficer || "UNASSIGNED",
+        assignedStreetlight: alert.nearestLight || alert.assignedStreetlight || "SL1",
+        distance: alert.distance || "30m",
+        priority: alert.priority || "HIGH"
+      });
+    }
+  });
+
+  return () => {
+    unsubscribeHistory();
+    unsubscribeCurrent();
+  };
 };
 
 // 8. Subscribe to citizen live location tracking
