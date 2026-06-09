@@ -57,7 +57,8 @@ const Navbar = ({ toggleSidebar }) => {
     }
   };
 
-  const hasActiveEmergency = activeSOSAlerts && activeSOSAlerts.length > 0;
+  const activeSOSList = (activeSOSAlerts || []).filter(a => a.status === "ACTIVE");
+  const hasActiveEmergency = activeSOSList.length > 0;
 
   return (
     <header className="flex flex-col bg-brand-card border-b border-brand-border z-30 shrink-0">
@@ -66,7 +67,7 @@ const Navbar = ({ toggleSidebar }) => {
         <div className="animate-siren-red border-b border-red-500 py-2.5 px-4 text-center flex items-center justify-center gap-3 select-none">
           <ShieldAlert className="w-5 h-5 text-white animate-bounce" />
           <span className="text-white font-display font-bold text-xs tracking-wider uppercase">
-            CRITICAL SOS IN PROGRESS: User {activeSOSAlerts[0].userName || "Unknown"} near {activeSOSAlerts[0].nearestLight || "N/A"} ({activeSOSAlerts[0].distance || "0m"})
+            CRITICAL SOS IN PROGRESS: User {activeSOSList[0].userName || "Unknown"} near {activeSOSList[0].nearestLight || "N/A"} ({activeSOSList[0].distance || "0m"})
           </span>
           <button 
             onClick={() => navigate("/alerts")}

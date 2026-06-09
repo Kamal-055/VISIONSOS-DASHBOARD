@@ -1,5 +1,6 @@
 import { ref, onValue, set, update, get } from "firebase/database";
-import { dbRealtime } from "../firebase/firebaseConfig";
+import { dbRealtime, dbFirestore } from "../firebase/firebaseConfig";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
 // 1. Subscribe to active current SOS alert from RTDB sos_history
 export const subscribeToCurrentAlert = (onAlertReceived) => {
@@ -112,6 +113,32 @@ export const updateCurrentCaseInRTDB = async (caseData) => {
   }
 };
 
+// Helper to synchronize active/new RTDB alerts to Firestore incident_history
+export const syncAlertToFirestore = async (alertId, alert) => {
+  try {
+    const docRef = doc(dbFirestore, "incident_history", alertId);
+    await setDoc(docRef, {
+      caseId: alertId,
+      citizenName: alert.userName || "Unknown User",
+      phone: alert.phone || "N/A",
+      assignedOfficer: alert.assignedOfficer || "UNASSIGNED",
+      assignedLight: alert.assignedStreetlight || alert.nearestLight || "SL1",
+      status: alert.status || "ACTIVE",
+      createdAt: alert.timestamp || new Date().toISOString(),
+      location: {
+        latitude: alert.latitude || 12.9585,
+        longitude: alert.longitude || 77.5530
+      },
+      priority: alert.priority || "HIGH",
+      emergencyType: alert.emergencyType || "Emergency",
+      severityLevel: alert.severityLevel || alert.priority || "HIGH",
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error syncing alert to Firestore:", error);
+  }
+};
+
 // 6. Write active SOS alert to RTDB sos_history, active_incidents, and current_alert
 export const setCurrentAlert = async (alertData) => {
   try {
@@ -126,7 +153,12 @@ export const setCurrentAlert = async (alertData) => {
       deviceId,
       uid,
       email,
-      status: "ACTIVE"
+      status: alertData.status || "ACTIVE",
+      emergencyType: alertData.emergencyType || "Emergency",
+      severityLevel: alertData.severityLevel || alertData.priority || "HIGH",
+      priority: alertData.priority || "HIGH",
+      assignedOfficer: alertData.assignedOfficer || "UNASSIGNED",
+      lastUpdated: new Date().toISOString()
     };
 
     // A. Write to sos_history (for archive/historical records)
@@ -140,6 +172,9 @@ export const setCurrentAlert = async (alertData) => {
     // C. Write to sos_alert/current_alert (for backward compatibility)
     const currentAlertRef = ref(dbRealtime, "sos_alert/current_alert");
     await set(currentAlertRef, enrichedAlertData);
+
+    // D. Synchronize to Firestore incident_history
+    await syncAlertToFirestore(alertId, enrichedAlertData);
 
   } catch (error) {
     console.error("Error setting alert in RTDB:", error);
@@ -175,6 +210,7 @@ export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
         resolvedAt: new Date().toISOString(),
         resolvedBy: updates.resolvedBy || "HQ Command Center",
         resolutionNotes: updates.resolutionNotes || "Alert cleared by dispatcher.",
+        lastUpdated: new Date().toISOString(),
         ...updates
       };
 
@@ -186,7 +222,49 @@ export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
       const incidentRef = ref(dbRealtime, `active_incidents/${targetKey}`);
       const incidentSnap = await get(incidentRef);
       if (incidentSnap.exists()) {
-        await update(incidentRef, updateData);
+        if (updateData.status === "RESOLVED" || updateData.status === "SAFE") {
+          // Remove from active_incidents node so it's cleared from active lists
+          await set(incidentRef, null);
+        } else {
+          await update(incidentRef, updateData);
+        }
+      }
+
+      // D. Update in Firestore
+      const firestoreDocRef = doc(dbFirestore, "incident_history", targetKey);
+      const firestoreSnap = await getDoc(firestoreDocRef);
+      const firestoreUpdates = {
+        status: updateData.status,
+        lastUpdated: new Date().toISOString()
+      };
+      if (updateData.status === "RESOLVED" || updateData.status === "SAFE") {
+        firestoreUpdates.resolvedAt = new Date().toISOString();
+      }
+      if (updateData.resolvedBy) {
+        firestoreUpdates.assignedOfficer = updateData.resolvedBy;
+      }
+      if (updateData.nearestLight) {
+        firestoreUpdates.assignedLight = updateData.nearestLight;
+      }
+
+      if (firestoreSnap.exists()) {
+        await updateDoc(firestoreDocRef, firestoreUpdates);
+      } else {
+        // Create resolved document if missing
+        await setDoc(firestoreDocRef, {
+          caseId: targetKey,
+          citizenName: data[targetKey]?.userName || "Unknown User",
+          phone: data[targetKey]?.phone || "N/A",
+          assignedOfficer: updateData.resolvedBy || "UNASSIGNED",
+          assignedLight: updateData.nearestLight || "SL1",
+          status: updateData.status,
+          createdAt: data[targetKey]?.timestamp || new Date().toISOString(),
+          resolvedAt: new Date().toISOString(),
+          location: {
+            latitude: data[targetKey]?.latitude || 12.9585,
+            longitude: data[targetKey]?.longitude || 77.5530
+          }
+        });
       }
 
       // C. Update sos_alert/current_alert (backward compatibility)
@@ -203,7 +281,7 @@ export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
             const incidents = activeIncSnap.val();
             const activeList = [];
             Object.keys(incidents).forEach(k => {
-              if (k !== targetKey && incidents[k] && (incidents[k].status === "ACTIVE" || incidents[k].status === "IN_PROGRESS")) {
+              if (k !== targetKey && incidents[k] && (incidents[k].status === "ACTIVE" || incidents[k].status === "ACKNOWLEDGED" || incidents[k].status === "RESPONDER_ASSIGNED" || incidents[k].status === "IN_PROGRESS")) {
                 activeList.push({ id: k, ...incidents[k] });
               }
             });
@@ -221,7 +299,11 @@ export const clearCurrentAlertInRTDB = async (alertId = null, updates = {}) => {
             });
           } else {
             // No other active alerts, just resolve current_alert
-            await update(currentAlertRef, updateData);
+            if (updateData.status === "RESOLVED" || updateData.status === "SAFE") {
+              await set(currentAlertRef, null);
+            } else {
+              await update(currentAlertRef, updateData);
+            }
           }
         }
       }
@@ -240,7 +322,7 @@ export const subscribeToActiveIncidents = (onIncidentsUpdated) => {
     const list = [];
     Object.keys(data).forEach(key => {
       const item = data[key];
-      if (item && (item.status === "ACTIVE" || item.status === "IN_PROGRESS")) {
+      if (item && (item.status === "ACTIVE" || item.status === "ACKNOWLEDGED" || item.status === "RESPONDER_ASSIGNED" || item.status === "IN_PROGRESS")) {
         list.push({
           incidentId: key,
           id: key,
@@ -270,14 +352,14 @@ export const startSOSBridgeListener = () => {
 
     Object.keys(data).forEach(async (key) => {
       const alert = data[key];
-      if (alert && alert.status === "ACTIVE" && !activeIncidentsData[key]) {
+      if (alert && (alert.status === "ACTIVE" || alert.status === "ACKNOWLEDGED" || alert.status === "RESPONDER_ASSIGNED" || alert.status === "IN_PROGRESS") && !activeIncidentsData[key]) {
         // Active in history but missing in active_incidents - copy it!
         console.log(`Bridge Sync: Copying active alert ${key} to active_incidents`);
         const deviceId = alert.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`;
         const uid = alert.uid || alert.user || `user_${Math.floor(1000 + Math.random() * 9000)}`;
         const email = alert.email || `${(alert.userName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`;
         
-        await set(ref(dbRealtime, `active_incidents/${key}`), {
+        const alertDataEnriched = {
           uid,
           deviceId,
           userName: alert.userName || "Unknown User",
@@ -286,12 +368,18 @@ export const startSOSBridgeListener = () => {
           latitude: alert.latitude || 12.9585,
           longitude: alert.longitude || 77.5530,
           timestamp: alert.timestamp || new Date().toISOString(),
-          status: "ACTIVE",
+          status: alert.status || "ACTIVE",
           assignedOfficer: alert.assignedOfficer || "UNASSIGNED",
           assignedStreetlight: alert.nearestLight || alert.assignedStreetlight || "SL1",
           distance: alert.distance || "30m",
-          priority: alert.priority || "HIGH"
-        });
+          priority: alert.priority || "HIGH",
+          emergencyType: alert.emergencyType || "Emergency",
+          severityLevel: alert.severityLevel || alert.priority || "HIGH",
+          lastUpdated: alert.lastUpdated || new Date().toISOString()
+        };
+
+        await set(ref(dbRealtime, `active_incidents/${key}`), alertDataEnriched);
+        await syncAlertToFirestore(key, alertDataEnriched);
       }
     });
   });
@@ -300,7 +388,7 @@ export const startSOSBridgeListener = () => {
   const currentAlertRef = ref(dbRealtime, "sos_alert/current_alert");
   const unsubscribeCurrent = onValue(currentAlertRef, async (snapshot) => {
     const alert = snapshot.val();
-    if (!alert || alert.status !== "ACTIVE") return;
+    if (!alert || (alert.status !== "ACTIVE" && alert.status !== "ACKNOWLEDGED" && alert.status !== "RESPONDER_ASSIGNED" && alert.status !== "IN_PROGRESS")) return;
 
     const alertId = alert.alertId || alert.id;
     if (!alertId) return;
@@ -317,7 +405,7 @@ export const startSOSBridgeListener = () => {
       const uid = alert.uid || alert.user || `user_${Math.floor(1000 + Math.random() * 9000)}`;
       const email = alert.email || `${(alert.userName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`;
 
-      await set(ref(dbRealtime, `active_incidents/${alertId}`), {
+      const alertDataEnriched = {
         uid,
         deviceId,
         userName: alert.userName || "Unknown User",
@@ -326,12 +414,18 @@ export const startSOSBridgeListener = () => {
         latitude: alert.latitude || 12.9585,
         longitude: alert.longitude || 77.5530,
         timestamp: alert.timestamp || new Date().toISOString(),
-        status: "ACTIVE",
+        status: alert.status || "ACTIVE",
         assignedOfficer: alert.assignedOfficer || "UNASSIGNED",
         assignedStreetlight: alert.nearestLight || alert.assignedStreetlight || "SL1",
         distance: alert.distance || "30m",
-        priority: alert.priority || "HIGH"
-      });
+        priority: alert.priority || "HIGH",
+        emergencyType: alert.emergencyType || "Emergency",
+        severityLevel: alert.severityLevel || alert.priority || "HIGH",
+        lastUpdated: alert.lastUpdated || new Date().toISOString()
+      };
+
+      await set(ref(dbRealtime, `active_incidents/${alertId}`), alertDataEnriched);
+      await syncAlertToFirestore(alertId, alertDataEnriched);
     }
   });
 

@@ -68,28 +68,40 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Recalculate stats - activeSOSCount now counts all concurrent active incidents in RTDB
-  const activeSOSCount = rtdbActiveIncidents.length;
-  
+  // Recalculate stats
+  const activeSOSCount = rtdbActiveIncidents.filter(
+    i => i.status === "ACTIVE" || i.status === "ACKNOWLEDGED" || i.status === "RESPONDER_ASSIGNED" || i.status === "IN_PROGRESS"
+  ).length;
+
   const totalStreetlights = Object.keys(streetlights).length;
   const onlineStreetlights = Object.values(streetlights).filter(s => s.status === "ONLINE").length;
   const offlineStreetlights = totalStreetlights - onlineStreetlights;
 
-  const rtdbResolvedCount = rtdbHistory.filter(h => h.status === "RESOLVED" || h.status === "SAFE").length;
-  const resolvedCasesCount = rtdbResolvedCount;
+  const resolvedCasesCount = rtdbHistory.filter(h => h.status === "RESOLVED" || h.status === "SAFE").length;
+  const highPriorityCount = rtdbActiveIncidents.filter(
+    i => i.priority === "HIGH" || i.priority === "CRITICAL" || i.severityLevel === "HIGH" || i.severityLevel === "CRITICAL"
+  ).length;
+  const usersInDistressCount = new Set(
+    rtdbActiveIncidents
+      .filter(i => i.status === "ACTIVE" || i.status === "ACKNOWLEDGED" || i.status === "RESPONDER_ASSIGNED" || i.status === "IN_PROGRESS")
+      .map(i => i.uid || i.user)
+  ).size;
+  const respondersAssignedCount = rtdbActiveIncidents.filter(
+    i => i.assignedOfficer && i.assignedOfficer !== "UNASSIGNED" && i.assignedOfficer !== ""
+  ).length;
 
   const activeIncidents = incidents.filter(i => i.status === "ACTIVE" || i.status === "IN_PROGRESS");
   const totalSOSAlerts = rtdbHistory.length;
 
-  // Calculate nearest pole dynamically for the current active alert
-  const nearestPoleInfo = React.useMemo(() => {
-    if (!currentAlert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
+  // Calculate nearest pole dynamically for a specific alert
+  const getNearestPoleInfo = (alert) => {
+    if (!alert || !streetlights || Object.keys(streetlights).length === 0) return { id: "SL1", distance: "30m" };
     
     let nearestId = "SL1";
     let minDistance = Infinity;
 
-    const lat1 = currentAlert.latitude;
-    const lon1 = currentAlert.longitude;
+    const lat1 = alert.latitude;
+    const lon1 = alert.longitude;
 
     Object.keys(streetlights).forEach(key => {
       const pole = streetlights[key];
@@ -117,7 +129,7 @@ const Dashboard = () => {
       id: nearestId,
       distance: Math.round(minDistance) + "m"
     };
-  }, [currentAlert, streetlights]);
+  };
 
   // Trigger Mock SOS alert in Firebase Realtime Database
   const triggerTestSOS = async () => {
@@ -134,6 +146,10 @@ const Dashboard = () => {
     const lngOffset = (Math.random() - 0.5) * 0.01;
 
     const deviceId = "DEV-" + Math.floor(100000 + Math.random() * 900000);
+    const emergencyTypes = ["Harassment", "Medical Emergency", "Accident", "Physical Threat", "Theft/Robbery"];
+    const severityLevels = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+    const selectedType = emergencyTypes[Math.floor(Math.random() * emergencyTypes.length)];
+    const selectedSeverity = severityLevels[Math.floor(Math.random() * severityLevels.length)];
 
     const testAlert = {
       alertId: mockSOSId,
@@ -148,7 +164,12 @@ const Dashboard = () => {
       timestamp: new Date().toISOString(),
       status: "ACTIVE",
       nearestLight: selectedSL,
-      distance: Math.floor(5 + Math.random() * 95) + "m"
+      distance: Math.floor(5 + Math.random() * 95) + "m",
+      emergencyType: selectedType,
+      severityLevel: selectedSeverity,
+      priority: selectedSeverity,
+      assignedOfficer: "UNASSIGNED",
+      lastUpdated: new Date().toISOString()
     };
 
     try {
@@ -175,17 +196,18 @@ const Dashboard = () => {
     }
   };
 
-  const handleResolveAlert = async () => {
-    if (!currentAlert) return;
+  const handleResolveAlert = async (alert) => {
+    if (!alert) return;
+    const nearestPole = getNearestPoleInfo(alert);
     try {
-      await clearCurrentAlertInRTDB(currentAlert.alertId || currentAlert.id, {
+      await clearCurrentAlertInRTDB(alert.alertId || alert.id, {
         status: "RESOLVED",
         resolvedBy: "HQ Command Center",
         resolutionNotes: "Alert marked resolved from Dashboard.",
-        nearestLight: currentAlert.nearestLight || nearestPoleInfo.id,
-        distance: currentAlert.distance || nearestPoleInfo.distance
+        nearestLight: alert.nearestLight || nearestPole.id,
+        distance: alert.distance || nearestPole.distance
       });
-      addToast("Active SOS alert cleared from live channel.", "success");
+      addToast(`Active SOS alert ${alert.alertId || alert.id} cleared from live channel.`, "success");
     } catch (e) {
       addToast("Failed to resolve alert.", "danger");
       console.error(e);
@@ -220,13 +242,13 @@ const Dashboard = () => {
 
       {/* Stats Counter Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Active SOS card */}
+        {/* Active Incidents card */}
         <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md relative overflow-hidden">
           {activeSOSCount > 0 && (
             <div className="absolute top-0 right-0 left-0 h-1 bg-brand-danger animate-pulse" />
           )}
           <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Active SOS</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Active Incidents</span>
             <h3 className={`font-display font-extrabold text-3xl tracking-tight ${activeSOSCount > 0 ? "text-brand-danger animate-pulse" : "text-brand-text"}`}>
               {activeSOSCount}
             </h3>
@@ -236,10 +258,10 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Resolved cases */}
+        {/* Resolved Incidents card */}
         <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resolved Cases</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resolved Incidents</span>
             <h3 className="font-display font-extrabold text-3xl tracking-tight text-brand-success">
               {resolvedCasesCount}
             </h3>
@@ -249,42 +271,42 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Total SOS */}
+        {/* High Priority Incidents card */}
         <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total Alerts</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">High Priority</span>
+            <h3 className={`font-display font-extrabold text-3xl tracking-tight ${highPriorityCount > 0 ? "text-amber-500 animate-pulse" : "text-brand-text"}`}>
+              {highPriorityCount}
+            </h3>
+          </div>
+          <div className={`p-3 rounded-lg ${highPriorityCount > 0 ? "bg-amber-500/10 text-amber-500 animate-pulse" : "bg-slate-800 text-gray-400"}`}>
+            <ShieldAlert size={22} />
+          </div>
+        </div>
+
+        {/* Users in Distress card */}
+        <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Users In Distress</span>
+            <h3 className={`font-display font-extrabold text-3xl tracking-tight ${usersInDistressCount > 0 ? "text-red-400 animate-pulse" : "text-brand-text"}`}>
+              {usersInDistressCount}
+            </h3>
+          </div>
+          <div className={`p-3 rounded-lg ${usersInDistressCount > 0 ? "bg-red-500/10 text-red-400" : "bg-slate-800 text-gray-400"}`}>
+            <Users size={22} />
+          </div>
+        </div>
+
+        {/* Responders Assigned card */}
+        <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Responders Assigned</span>
             <h3 className="font-display font-extrabold text-3xl tracking-tight text-blue-400">
-              {totalSOSAlerts}
+              {respondersAssignedCount}
             </h3>
           </div>
           <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400">
-            <Radio size={22} className="animate-pulse" />
-          </div>
-        </div>
-
-        {/* Online Streetlights */}
-        <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Lights Online</span>
-            <h3 className="font-display font-extrabold text-3xl tracking-tight text-green-400">
-              {onlineStreetlights} <span className="text-xs font-normal text-slate-500">/ {totalStreetlights || 4}</span>
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-green-500/10 text-green-400">
-            <Lightbulb size={22} />
-          </div>
-        </div>
-
-        {/* Offline Streetlights */}
-        <div className="bg-brand-card border border-brand-border p-5 rounded-xl flex items-center justify-between shadow-md">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Lights Offline</span>
-            <h3 className="font-display font-extrabold text-3xl tracking-tight text-amber-500">
-              {offlineStreetlights}
-            </h3>
-          </div>
-          <div className="p-3 rounded-lg bg-amber-500/10 text-brand-warning">
-            <PowerOff size={22} />
+            <UserCheck size={22} />
           </div>
         </div>
       </div>
@@ -301,58 +323,66 @@ const Dashboard = () => {
               Live Emergency Intercept
             </h4>
 
-            {currentAlert ? (
-              <div className="bg-slate-900 border border-brand-border rounded-xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-3 w-3 rounded-full bg-brand-danger animate-ping" />
-                    <div>
-                      <h5 className="font-bold text-base text-brand-text flex items-center gap-2">
-                        {currentAlert.userName}
-                      </h5>
-                      <p className="text-xs text-gray-400">Phone: {currentAlert.phone}</p>
+            {rtdbActiveIncidents && rtdbActiveIncidents.length > 0 ? (
+              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                {rtdbActiveIncidents.map((alert) => {
+                  const nearestPole = getNearestPoleInfo(alert);
+                  return (
+                    <div key={alert.incidentId || alert.id} className="bg-slate-900 border border-brand-border rounded-xl p-5 space-y-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-3 w-3 rounded-full bg-brand-danger animate-ping" />
+                          <div>
+                            <h5 className="font-bold text-base text-brand-text flex items-center gap-2">
+                              {alert.userName}
+                            </h5>
+                            <p className="text-xs text-gray-400">Phone: {alert.phone}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono px-3 py-1 bg-red-950/40 text-brand-danger border border-red-500/30 rounded uppercase font-bold tracking-widest animate-pulse">
+                          {alert.emergencyType || "SOS"} - {alert.priority || alert.severityLevel || "CRITICAL"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-950 rounded-lg text-xs font-mono">
+                        <div>
+                          <span className="text-gray-500 block">ALERT ID</span>
+                          <span className="text-brand-text font-bold">{alert.incidentId || alert.id}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block">NEAREST POLE</span>
+                          <span className="text-brand-text font-bold text-brand-warning">{alert.nearestLight || nearestPole.id}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block">DISTANCE</span>
+                          <span className="text-brand-text font-bold text-green-400">{alert.distance || nearestPole.distance}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block">COORDINATES</span>
+                          <span className="text-brand-text font-bold truncate block" title={`${alert.latitude}, ${alert.longitude}`}>
+                            {alert.latitude?.toFixed(4)}, {alert.longitude?.toFixed(4)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <Link
+                          to="/map"
+                          state={{ centerAlertId: alert.incidentId || alert.id }}
+                          className="flex-1 min-w-[120px] text-center py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Locate on Map
+                        </Link>
+                        <button
+                          onClick={() => handleResolveAlert(alert)}
+                          className="flex-1 min-w-[120px] py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Mark Resolved
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-xs font-mono px-3 py-1 bg-red-950/40 text-brand-danger border border-red-500/30 rounded uppercase font-bold tracking-widest animate-pulse">
-                    CRITICAL SOS ACTIVE
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-950 rounded-lg text-xs font-mono">
-                  <div>
-                    <span className="text-gray-500 block">ALERT ID</span>
-                    <span className="text-brand-text font-bold">{currentAlert.alertId}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">NEAREST POLE</span>
-                    <span className="text-brand-text font-bold text-brand-warning">{currentAlert.nearestLight || nearestPoleInfo.id}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">DISTANCE</span>
-                    <span className="text-brand-text font-bold text-green-400">{currentAlert.distance || nearestPoleInfo.distance}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">COORDINATES</span>
-                    <span className="text-brand-text font-bold truncate block" title={`${currentAlert.latitude}, ${currentAlert.longitude}`}>
-                      {currentAlert.latitude?.toFixed(4)}, {currentAlert.longitude?.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 pt-2">
-                  <Link
-                    to="/map"
-                    className="flex-1 min-w-[120px] text-center py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                  >
-                    Locate on Map
-                  </Link>
-                  <button
-                    onClick={handleResolveAlert}
-                    className="flex-1 min-w-[120px] py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                  >
-                    Mark Resolved
-                  </button>
-                </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">

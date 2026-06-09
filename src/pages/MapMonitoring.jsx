@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { subscribeToCurrentAlert, subscribeToStreetlights, subscribeToLiveTracking } from "../services/rtdbService";
+import { subscribeToActiveIncidents, subscribeToStreetlights, subscribeToLiveTracking } from "../services/rtdbService";
 import { subscribeToPoliceStations, subscribeToPoliceUnits } from "../services/firestoreService";
 import { Radio, ShieldAlert, Compass } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+import { useLocation } from "react-router-dom";
 
 // Inline SVG Pins to avoid Vite Leaflet asset resolution bugs
 const createSVGIcon = (color, type) => {
@@ -69,32 +70,47 @@ const ChangeMapView = ({ center }) => {
 
 const MapMonitoring = () => {
   const { resolvedTheme } = useTheme();
-  const [currentAlert, setCurrentAlert] = useState(null);
+  const location = useLocation();
+  const centerAlertId = location?.state?.centerAlertId;
+  const [activeAlerts, setActiveAlerts] = useState([]);
   const [streetlights, setStreetlights] = useState({});
   const [policeStations, setPoliceStations] = useState([]);
   const [policeUnits, setPoliceUnits] = useState([]);
-  const [liveLocation, setLiveLocation] = useState(null);
+  const [liveLocations, setLiveLocations] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubTracking = () => {};
+    let trackingUnsubs = {};
 
-    // 1. Subscribe to Live Alerts
-    const unsubAlert = subscribeToCurrentAlert((alert) => {
-      setCurrentAlert(alert);
+    // 1. Subscribe to Live SOS Alerts from RTDB active_incidents
+    const unsubAlerts = subscribeToActiveIncidents((alerts) => {
+      setActiveAlerts(alerts);
       
-      // Clean up previous tracking if user changes
-      unsubTracking();
-      setLiveLocation(null);
+      // Setup tracking for all active users
+      const newTrackingUnsubs = {};
+      alerts.forEach((alert) => {
+        const userId = alert.uid || alert.user;
+        if (userId && !trackingUnsubs[userId]) {
+          newTrackingUnsubs[userId] = subscribeToLiveTracking(userId, (loc) => {
+            if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+              setLiveLocations((prev) => ({
+                ...prev,
+                [userId]: loc
+              }));
+            }
+          });
+        } else if (userId && trackingUnsubs[userId]) {
+          newTrackingUnsubs[userId] = trackingUnsubs[userId];
+          delete trackingUnsubs[userId];
+        }
+      });
 
-      // If alert is active, subscribe to live tracking of the user
-      if (alert && alert.user) {
-        unsubTracking = subscribeToLiveTracking(alert.user, (loc) => {
-          if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-            setLiveLocation(loc);
-          }
-        });
-      }
+      // Unsubscribe from users who are no longer active
+      Object.keys(trackingUnsubs).forEach((userId) => {
+        trackingUnsubs[userId]();
+      });
+
+      trackingUnsubs = newTrackingUnsubs;
     });
 
     // 2. Subscribe to Streetlights
@@ -114,27 +130,69 @@ const MapMonitoring = () => {
     });
 
     return () => {
-      unsubAlert();
+      unsubAlerts();
       unsubLights();
       unsubStations();
       unsubUnits();
-      unsubTracking();
+      Object.values(trackingUnsubs).forEach((unsub) => unsub());
     };
   }, []);
 
-  // Active user position (uses live moving GPS coordinate, falls back to static trigger)
-  const sosPosition = React.useMemo(() => {
-    if (!currentAlert) return null;
-    const lat = liveLocation?.latitude !== undefined ? liveLocation.latitude : currentAlert.latitude;
-    const lng = liveLocation?.longitude !== undefined ? liveLocation.longitude : currentAlert.longitude;
-    return [lat, lng];
-  }, [currentAlert, liveLocation]);
+  // Compute final positions, using live moving GPS coordinate if tracked, otherwise static
+  const alertsWithPositions = React.useMemo(() => {
+    return activeAlerts.map((alert) => {
+      const userId = alert.uid || alert.user;
+      const liveLoc = liveLocations[userId];
+      const lat = liveLoc?.latitude !== undefined ? liveLoc.latitude : alert.latitude;
+      const lng = liveLoc?.longitude !== undefined ? liveLoc.longitude : alert.longitude;
+      return {
+        ...alert,
+        latitude: lat,
+        longitude: lng
+      };
+    });
+  }, [activeAlerts, liveLocations]);
 
-  // Map center logic (center on alert if exists, otherwise Bangalore Police HQ)
+  // Apply deterministic jitter (offset) for identical coordinates to prevent overlays
+  const processedAlerts = React.useMemo(() => {
+    const groups = {};
+    alertsWithPositions.forEach((alert) => {
+      if (typeof alert.latitude !== 'number' || typeof alert.longitude !== 'number') return;
+      const key = `${alert.latitude.toFixed(5)}_${alert.longitude.toFixed(5)}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(alert);
+    });
+
+    const result = [];
+    Object.values(groups).forEach((group) => {
+      const count = group.length;
+      group.forEach((alert, index) => {
+        if (count <= 1) {
+          result.push({ ...alert, displayLat: alert.latitude, displayLng: alert.longitude, hasLive: !!liveLocations[alert.uid || alert.user] });
+        } else {
+          const angle = (index * 2 * Math.PI) / count;
+          const distance = 0.00015; // ~15 meters
+          const displayLat = alert.latitude + Math.sin(angle) * distance;
+          const displayLng = alert.longitude + Math.cos(angle) * distance;
+          result.push({ ...alert, displayLat, displayLng, hasLive: !!liveLocations[alert.uid || alert.user] });
+        }
+      });
+    });
+    return result;
+  }, [alertsWithPositions, liveLocations]);
+
+  // Center logic: center on centerAlertId if provided, otherwise latest active alert, otherwise Bangalore
   const mapCenter = React.useMemo(() => {
-    if (sosPosition) return sosPosition;
-    return [12.9585, 77.5530]; // Bangalore Control Room Center
-  }, [sosPosition]);
+    if (centerAlertId) {
+      const target = processedAlerts.find(a => (a.incidentId || a.id) === centerAlertId);
+      if (target) return [target.latitude, target.longitude];
+    }
+    if (processedAlerts.length > 0) {
+      const latest = processedAlerts[0];
+      return [latest.latitude, latest.longitude];
+    }
+    return [12.9585, 77.5530];
+  }, [processedAlerts, centerAlertId]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -150,11 +208,11 @@ const MapMonitoring = () => {
           </p>
         </div>
         
-        {currentAlert && (
+        {processedAlerts.length > 0 && (
           <div className="flex items-center gap-2.5 px-3.5 py-1.5 bg-red-950/40 text-brand-danger border border-red-500/30 rounded-lg animate-pulse">
             <Radio size={14} className="animate-ping" />
             <span className="text-[10px] font-bold uppercase tracking-wider">
-              SOS Intercept Locked
+              {processedAlerts.length} SOS Intercepts Locked
             </span>
           </div>
         )}
@@ -183,30 +241,35 @@ const MapMonitoring = () => {
             }
           />
 
-          <ChangeMapView center={sosPosition} />
+          <ChangeMapView center={mapCenter} />
 
-          {/* 1. Render Active SOS Citizen Marker */}
-          {sosPosition && (
+          {/* 1. Render Active SOS Citizen Markers */}
+          {processedAlerts.map((alert) => (
             <Marker 
-              position={sosPosition} 
+              key={alert.incidentId || alert.id || alert.alertId}
+              position={[alert.displayLat, alert.displayLng]} 
               icon={icons.sos}
             >
               <Popup>
                 <div className="space-y-1.5 p-1 text-xs">
                   <div className="flex items-center gap-1.5 text-brand-danger font-bold uppercase tracking-wider">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
-                    Distress SOS Active {liveLocation ? "• Tracking Live" : ""}
+                    Distress SOS Active {alert.hasLive ? "• Tracking Live" : ""}
                   </div>
                   <div className="border-t border-slate-700 my-1 pt-1 space-y-1 font-mono">
-                    <p><strong>Citizen:</strong> {currentAlert.userName}</p>
-                    <p><strong>Contact:</strong> {currentAlert.phone}</p>
-                    <p><strong>Coordinates:</strong> {sosPosition[0].toFixed(5)}, {sosPosition[1].toFixed(5)}</p>
-                    <p><strong>Time:</strong> {new Date(currentAlert.timestamp).toLocaleTimeString()}</p>
+                    <p><strong>Incident ID:</strong> {alert.incidentId || alert.id || alert.alertId}</p>
+                    <p><strong>User ID:</strong> {alert.uid || alert.user || "N/A"}</p>
+                    <p><strong>Citizen:</strong> {alert.userName}</p>
+                    <p><strong>Contact:</strong> {alert.phone}</p>
+                    <p><strong>Coordinates:</strong> {alert.latitude.toFixed(5)}, {alert.longitude.toFixed(5)}</p>
+                    <p><strong>Time:</strong> {new Date(alert.timestamp).toLocaleTimeString()}</p>
+                    <p><strong>Status:</strong> {alert.status}</p>
+                    <p><strong>Emergency Type:</strong> {alert.emergencyType || "Emergency"}</p>
                   </div>
                 </div>
               </Popup>
             </Marker>
-          )}
+          ))}
 
           {/* 2. Render Police Station Precinct HQ Markers */}
           {policeStations.map((station, i) => {

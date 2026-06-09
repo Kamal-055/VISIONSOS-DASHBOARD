@@ -17,7 +17,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const LiveAlerts = () => {
-  const { addToast, setSirenPlaying } = useNotifications();
+  const { addToast } = useNotifications();
   const navigate = useNavigate();
   
   // States
@@ -146,9 +146,6 @@ const LiveAlerts = () => {
         distance: targetDistance
       });
 
-      if (activeAlerts.length <= 1) {
-        setSirenPlaying(false);
-      }
       setShowAssignModal(false);
       setSelectedOfficer("");
       setSelectedTargetAlert(null);
@@ -191,9 +188,6 @@ const LiveAlerts = () => {
         distance: targetDistance
       });
 
-      if (activeAlerts.length <= 1) {
-        setSirenPlaying(false);
-      }
       setShowResolveModal(false);
       setResolutionNotes("");
       setSelectedTargetAlert(null);
@@ -211,9 +205,6 @@ const LiveAlerts = () => {
         resolvedBy: "HQ Command Center",
         resolutionNotes: "Live active alert signal discarded."
       });
-      if (activeAlerts.length <= 1) {
-        setSirenPlaying(false);
-      }
       addToast("Live alert deleted from channel.", "info");
     } catch (e) {
       addToast("Failed to delete alert.", "danger");
@@ -294,7 +285,7 @@ const LiveAlerts = () => {
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => navigate("/map")}
+                            onClick={() => navigate("/map", { state: { centerAlertId: alert.alertId || alert.id } })}
                             className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
                             title="Locate Alert on Leaflet Map"
                           >

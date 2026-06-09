@@ -13,7 +13,8 @@ import {
   deleteDoc,
   onSnapshot
 } from "firebase/firestore";
-import { dbFirestore } from "../firebase/firebaseConfig";
+import { dbFirestore, dbRealtime } from "../firebase/firebaseConfig";
+import { ref, get, set, update } from "firebase/database";
 
 // ===== OFFICERS SERVICE =====
 
@@ -144,12 +145,14 @@ export const getIncidents = async () => {
 
 export const createIncident = async (incidentData) => {
   try {
-    const ref = collection(dbFirestore, "incident_history");
-    const docRef = await addDoc(ref, {
+    const caseId = incidentData.caseId || `CASE-${Date.now()}`;
+    const docRef = doc(dbFirestore, "incident_history", caseId);
+    await setDoc(docRef, {
       ...incidentData,
-      createdAt: new Date().toISOString()
+      caseId,
+      createdAt: incidentData.createdAt || new Date().toISOString()
     });
-    return docRef.id;
+    return caseId;
   } catch (error) {
     console.error("Error creating incident:", error);
     throw error;
@@ -164,6 +167,86 @@ export const updateIncidentStatusInFirestore = async (caseId, status, updates = 
       data.resolvedAt = new Date().toISOString();
     }
     await updateDoc(docRef, data);
+
+    // Synchronize status back to RTDB active_incidents and sos_history
+    const rtdbUpdates = {
+      status,
+      lastUpdated: new Date().toISOString(),
+      ...updates
+    };
+    if (updates.assignedOfficer) {
+      rtdbUpdates.assignedOfficer = updates.assignedOfficer;
+    }
+    if (updates.assignedLight) {
+      rtdbUpdates.assignedStreetlight = updates.assignedLight;
+      rtdbUpdates.nearestLight = updates.assignedLight;
+    }
+
+    // A. Update in active_incidents
+    const activeIncRef = ref(dbRealtime, `active_incidents/${caseId}`);
+    if (status === "RESOLVED" || status === "SAFE") {
+      await set(activeIncRef, null); // Remove if resolved
+    } else {
+      const activeSnap = await get(activeIncRef);
+      if (activeSnap.exists()) {
+        await update(activeIncRef, rtdbUpdates);
+      } else {
+        // Recreate in RTDB active_incidents if it is being activated
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const docData = docSnap.data();
+          await set(activeIncRef, {
+            uid: docData.uid || docData.userId || `user_${Math.floor(1000 + Math.random() * 9000)}`,
+            deviceId: docData.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`,
+            userName: docData.citizenName || "Unknown User",
+            email: `${(docData.citizenName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`,
+            phone: docData.phone || "N/A",
+            latitude: docData.location?.latitude || docData.latitude || 12.9585,
+            longitude: docData.location?.longitude || docData.longitude || 77.5530,
+            timestamp: docData.createdAt || new Date().toISOString(),
+            status,
+            assignedOfficer: docData.assignedOfficer || "UNASSIGNED",
+            assignedStreetlight: docData.assignedLight || "SL1",
+            distance: docData.distance || "30m",
+            priority: docData.priority || "HIGH",
+            emergencyType: docData.emergencyType || "Emergency",
+            severityLevel: docData.severityLevel || docData.priority || "HIGH",
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      }
+    }
+
+    // B. Update in sos_history
+    const historyRef = ref(dbRealtime, `sos_history/${caseId}`);
+    const historySnap = await get(historyRef);
+    if (historySnap.exists()) {
+      await update(historyRef, rtdbUpdates);
+    } else {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const docData = docSnap.data();
+        await set(historyRef, {
+          uid: docData.uid || docData.userId || `user_${Math.floor(1000 + Math.random() * 9000)}`,
+          deviceId: docData.deviceId || `DEV-${Math.floor(100000 + Math.random() * 900000)}`,
+          userName: docData.citizenName || "Unknown User",
+          email: `${(docData.citizenName || 'user').toLowerCase().replace(/\s+/g, '')}@vision.gov`,
+          phone: docData.phone || "N/A",
+          latitude: docData.location?.latitude || docData.latitude || 12.9585,
+          longitude: docData.location?.longitude || docData.longitude || 77.5530,
+          timestamp: docData.createdAt || new Date().toISOString(),
+          status,
+          assignedOfficer: docData.assignedOfficer || "UNASSIGNED",
+          assignedStreetlight: docData.assignedLight || "SL1",
+          distance: docData.distance || "30m",
+          priority: docData.priority || "HIGH",
+          emergencyType: docData.emergencyType || "Emergency",
+          severityLevel: docData.severityLevel || docData.priority || "HIGH",
+          lastUpdated: new Date().toISOString()
+        });
+      }
+    }
+
   } catch (error) {
     console.error("Error updating incident status in firestore:", error);
     throw error;

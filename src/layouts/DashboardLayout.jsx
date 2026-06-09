@@ -11,7 +11,7 @@ const DashboardLayout = () => {
   const { addToast, setSirenPlaying, setActiveSOSAlerts } = useNotifications();
   
   // Track alert status and streetlight states to detect changes
-  const prevAlertIdRef = useRef(null);
+  const notifiedAlertsRef = useRef(new Set());
   const prevStreetlightsRef = useRef({});
 
   useEffect(() => {
@@ -20,24 +20,35 @@ const DashboardLayout = () => {
 
     // 1. Subscribe to Live SOS Alerts from RTDB active_incidents
     const unsubscribeAlerts = subscribeToActiveIncidents((alerts) => {
-      if (alerts && alerts.length > 0) {
-        // Active alerts exist
-        setActiveSOSAlerts(alerts);
-        
-        // Check if the latest alert is a newly received alert
-        const latestAlert = alerts[0];
-        if (latestAlert.incidentId !== prevAlertIdRef.current) {
-          prevAlertIdRef.current = latestAlert.incidentId;
-          
-          // Trigger notifications
-          addToast(`CRITICAL: Live SOS Alert [${latestAlert.incidentId}] from ${latestAlert.userName}!`, "danger");
-          setSirenPlaying(true);
+      const safeAlerts = alerts || [];
+      setActiveSOSAlerts(safeAlerts);
+
+      // Clean up notified set of any alerts that are no longer active/present
+      const currentIds = new Set(safeAlerts.map(a => a.incidentId));
+      notifiedAlertsRef.current.forEach(id => {
+        if (!currentIds.has(id)) {
+          notifiedAlertsRef.current.delete(id);
         }
+      });
+
+      // Filter for currently ACTIVE status alerts
+      const activeOnlyAlerts = safeAlerts.filter(a => a.status === "ACTIVE");
+      const hasActive = activeOnlyAlerts.length > 0;
+
+      if (hasActive) {
+        // Trigger toast notifications for any new active alerts we haven't notified yet
+        activeOnlyAlerts.forEach(alert => {
+          if (!notifiedAlertsRef.current.has(alert.incidentId)) {
+            notifiedAlertsRef.current.add(alert.incidentId);
+            addToast(`CRITICAL: Live SOS Alert [${alert.incidentId}] from ${alert.userName}!`, "danger");
+          }
+        });
+        
+        // Turn siren ON
+        setSirenPlaying(true);
       } else {
-        // No active alerts
-        setActiveSOSAlerts([]);
+        // Turn siren OFF
         setSirenPlaying(false);
-        prevAlertIdRef.current = null;
       }
     });
 
